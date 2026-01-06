@@ -70,8 +70,9 @@ dev-repo.yaml
 src/frontend copy/
 src/frontend copy/*
 src/react-native-app/.env
-src/react-native-app/.env
-src/react-native-app/.env
 src/react-native-app/.env.backup
 releases/mobile/*.zip
 src/react-native-app/saucelabs-package/ios/astronomy-shop-ios.zip
+
+# Claude
+.claude/settings.local.json
