@@ -28,7 +28,9 @@
 
 [OpenTelemetryデモアプリ](https://github.com/signalfx/opentelemetry-demo/tree/main/splunk)を利用。
 
-Doc: <https://opentelemetry.io/docs/demo/>
+オリジナルDoc: <https://opentelemetry.io/docs/demo/>
+
+Splunkバージョン用デプロイ手順(Docker版): <https://lantern.splunk.com/Observability_Use_Cases/Optimize_Costs/Setting_up_the_OpenTelemetry_Demo_in_Docker>
 
 ### エラー実装
 
@@ -51,3 +53,12 @@ Doc: <https://opentelemetry.io/docs/demo/>
 - インフラを壊すとまずインフラを直さないと他のシナリオを解けないという制限がかかる
   - アプリ全問クリアしたら、FISにアクセスして何か障害を起こす
     - EC2 Roleに関連ポリシーが必要
+- **Splunk Cloudは配布環境に含めないため**、ログデータの送出をしなくてもCollector動作に問題がないことを検証しておく
+
+## 暫定実装ステップ計画
+
+1. ローカルで動的デプロイ手順・Splunk Observability Cloudへのテレメトリ送信確認
+2. 任意の数のEC2上でサンプルアプリケーションを立ち上げるデプロイスクリプトの作成と検証
+3. イベント運営用のシンプルなWEBアプリを作成（ECS Express modeで単一コンテナとして実行）
+4. Feature Flagsのうち、自由入力設問に活用できるものをリストアップし、適切な設問としてイベント運営アプリに設問と回答・得点板を実装する
+5. Stage2（FISによる動的インフラ障害発生シナリオを追加する）関連機能の実装
