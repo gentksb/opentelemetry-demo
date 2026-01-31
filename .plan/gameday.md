@@ -39,7 +39,7 @@ Splunkバージョン用デプロイ手順(Docker版): <https://lantern.splunk.c
 
 ## デプロイ
 
-適当なEC2 Imageとして参加チーム分複数起動＋userdataでアプリ起動
+EKS Clusterに複数のnamespace（チームごと）としてデプロイする
 
 ### 考慮事項
 
@@ -55,10 +55,159 @@ Splunkバージョン用デプロイ手順(Docker版): <https://lantern.splunk.c
     - EC2 Roleに関連ポリシーが必要
 - **Splunk Cloudは配布環境に含めないため**、ログデータの送出をしなくてもCollector動作に問題がないことを検証しておく
 
-## 暫定実装ステップ計画
+---
 
-1. ローカルで動的デプロイ手順・Splunk Observability Cloudへのテレメトリ送信確認
-2. 任意の数のEC2上でサンプルアプリケーションを立ち上げるデプロイスクリプトの作成と検証
-3. イベント運営用のシンプルなWEBアプリを作成（ECS Express modeで単一コンテナとして実行）
-4. Feature Flagsのうち、自由入力設問に活用できるものをリストアップし、適切な設問としてイベント運営アプリに設問と回答・得点板を実装する
-5. Stage2（FISによる動的インフラ障害発生シナリオを追加する）関連機能の実装
+## 実装ステップ計画
+
+### ステップ1: ローカルデプロイ確認 - 完了
+
+**目的**: Splunk Observability Cloudへのテレメトリ送信を確認
+
+**実施内容**:
+- kind Kubernetesクラスタでデモアプリ動作確認
+- Splunk OTel Collectorインストール・テレメトリ送信確認
+- `splunk/otelcol-config.yml`のHECエクスポーター問題修正
+
+**コミット**: `4a1e78c fix: disable splunk_hec exporter to avoid missing token error`
+
+**残Todo**:
+- [ ] `deployment.environment`タグによるチーム識別の追加
+  - OTEL_RESOURCE_ATTRIBUTESに`deployment.environment=team-XX`を追加
+  - Splunk APMでEnvironmentフィルタリング可能にする
+
+---
+
+### ステップ2: EKSデプロイスクリプト - 完了
+
+**目的**: チーム数分のnamespaceを一括デプロイ
+
+**実施内容**:
+- SAMテンプレートでEKSクラスタ + VPC + NodeGroup作成
+- `deploy-teams.sh`でnamespace分離デプロイ
+- Splunk OTel Collector自動インストール
+- `cleanup-teams.sh`でnamespace削除
+
+**コミット**:
+- `05c8777 feat: add o11y Game Day infrastructure and admin app`
+- `d14a7d4 fix: update cleanup script for EKS namespace deployment`
+
+**残Todo**:
+- [ ] Cleanupをデフォルト全削除に変更
+  - 現在: `--delete-collector`オプションでCollector削除
+  - 変更後: デフォルトで全削除、`--keep-collector`オプションでCollector残す
+
+**構成**:
+```
+gameday/infra/
+├── template.yaml       # EKS + VPC SAMテンプレート
+├── deploy-teams.sh     # チームnamespaceデプロイ
+├── cleanup-teams.sh    # クリーンアップ
+└── list-teams.sh       # チーム一覧表示
+```
+
+**デプロイコマンド**:
+```bash
+# EKSクラスタ作成
+cd gameday/infra && sam build && sam deploy --stack-name gameday-eks ...
+
+# kubeconfigを更新
+aws eks update-kubeconfig --name gameday-otel-demo --region ap-northeast-1
+
+# チームデプロイ
+./gameday/infra/deploy-teams.sh --team-count 5 --splunk-token xxx --splunk-realm jp0
+```
+
+---
+
+### ステップ3: イベント運営WEBアプリ - 基本実装完了
+
+**目的**: スコア管理・回答収集用のWebアプリ
+
+**実施内容**:
+- Express.js + TypeScriptアプリケーション
+- DynamoDB テーブル定義（teams, answers, questions）
+- チーム回答画面（team.html）
+- 運営ダッシュボード（admin.html）
+- ECS Fargate用Dockerfile
+
+**構成**:
+```
+gameday/admin-app/
+├── src/
+│   ├── index.ts           # Express.jsエントリポイント
+│   ├── routes/            # API routes
+│   └── services/          # DynamoDB, scoring
+├── public/
+│   ├── team.html          # チーム回答画面
+│   └── admin.html         # 運営ダッシュボード
+├── template.yaml          # DynamoDB + ECS SAMテンプレート
+└── Dockerfile
+```
+
+**残Todo**:
+- [ ] admin-appのローカル動作確認
+- [ ] ECS Fargateへのデプロイ検証
+- [ ] ALB経由でのアクセス設定
+
+---
+
+### ステップ4: 設問・回答・得点システム - 基本実装完了
+
+**Feature Flags と設問**:
+
+| Flag | サービス | 設問 | 正解キーワード | 点数 |
+|------|----------|------|---------------|------|
+| adFailure | ad | GetAds RPCが失敗する原因のメソッド名は？ | `getAds`, `AdService` | 100 |
+| adManualGc | ad | 手動GCをトリガーするクラス名は？ | `GarbageCollectionTrigger` | 100 |
+| cartFailure | cart | Cart操作失敗の原因となるストア名は？ | `_badCartStore` | 100 |
+| productCatalogFailure | product-catalog | エラーとなる商品IDは？ | `OLJCESPC7Z` | 100 |
+| paymentFailure | payment | 支払い失敗するユーザー属性は？ | `gold` | 100 |
+| paymentUnreachable | checkout | 到達不能なアドレスは？ | `badAddress:50051` | 100 |
+| recommendationCacheFailure | recommendation | 問題の機能名は？ | `cache`, `cached_ids` | 100 |
+| emailMemoryLeak | email | メモリリークの原因処理は？ | `send_email`, `deliveries` | 100 |
+| imageSlowLoad | frontend | 遅延を引き起こすHTTPヘッダーは？ | `x-envoy-fault-delay-request` | 100 |
+| kafkaQueueProblems | kafka | キュー問題の原因は？ | `kafka`, `producer` | 100 |
+
+**得点計算**:
+- 基本点 × (1 - 経過分 × 0.005) - 誤答ペナルティ(5点/回)
+- 最低得点: 10点（正解時）
+
+**残Todo**:
+- [ ] 各Feature Flagを実際に有効化してAPMでの見え方を確認
+- [ ] 設問と正解キーワードの精査・調整
+
+---
+
+### ステップ5: Stage2（FIS）- 未着手
+
+**目的**: アプリ全問クリア後にインフラ障害を追加
+
+**計画内容**:
+- FIS実験テンプレート作成（CPU Stress, Memory Stress, Network Latency）
+- Stage2用の追加設問
+- 移行条件: Stage1全問正解 または 運営手動移行
+
+**残Todo**:
+- [ ] FIS実験テンプレート作成
+- [ ] Stage2設問の設計
+- [ ] admin-appへのStage移行機能追加
+
+---
+
+## Critical Files
+
+| ファイル | 用途 |
+|---------|------|
+| `splunk/docker-compose.yml` | Splunk版Docker Compose |
+| `splunk/opentelemetry-demo.yaml` | Kubernetes マニフェスト |
+| `splunk/otelcol-config.yml` | OTel Collector設定 |
+| `src/flagd/demo.flagd.json` | Feature Flag定義 |
+| `.env` | 環境変数 |
+
+---
+
+## タグ要件
+
+全AWSリソースに付与:
+- `splunkit_data_classification`: `public`
+- `splunkit_environment_type`: `non-prd`
