@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# cleanup-teams.sh - Delete o11y Game Day EC2 stacks
+# cleanup-teams.sh - Delete o11y Game Day team namespaces from EKS
 #
 # Usage: ./cleanup-teams.sh --team-count 5
 
@@ -8,8 +8,8 @@ set -e
 
 # Default values
 TEAM_COUNT=1
-REGION="ap-northeast-1"
-STACK_PREFIX="gameday"
+CLUSTER_NAME="gameday-otel-demo"
+DELETE_COLLECTOR=false
 
 # Colors for output
 RED='\033[0;31m'
@@ -22,9 +22,9 @@ print_usage() {
 Usage: $0 [OPTIONS]
 
 Options:
-  --team-count NUM       Number of team stacks to delete (default: 1)
-  --region REGION        AWS region (default: ap-northeast-1)
-  --stack-prefix PREFIX  CloudFormation stack prefix (default: gameday)
+  --team-count NUM       Number of team namespaces to delete (default: 1)
+  --cluster-name NAME    EKS cluster name (default: gameday-otel-demo)
+  --delete-collector     Also delete Splunk OTel Collector
   --force                Skip confirmation prompt
   --help                 Show this help message
 
@@ -53,13 +53,13 @@ while [[ $# -gt 0 ]]; do
             TEAM_COUNT="$2"
             shift 2
             ;;
-        --region)
-            REGION="$2"
+        --cluster-name)
+            CLUSTER_NAME="$2"
             shift 2
             ;;
-        --stack-prefix)
-            STACK_PREFIX="$2"
-            shift 2
+        --delete-collector)
+            DELETE_COLLECTOR=true
+            shift
             ;;
         --force)
             FORCE=true
@@ -77,36 +77,59 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Check kubectl
+if ! command -v kubectl &> /dev/null; then
+    log_error "kubectl is not installed"
+    exit 1
+fi
+
+# Verify cluster connection
+if ! kubectl cluster-info &> /dev/null; then
+    log_error "Cannot connect to Kubernetes cluster"
+    exit 1
+fi
+
 log_info "=== o11y Game Day Cleanup ==="
+log_info "Cluster: $CLUSTER_NAME"
 log_info "Teams to delete: $TEAM_COUNT"
-log_info "Region: $REGION"
-log_info "Stack prefix: $STACK_PREFIX"
 echo ""
 
-# List stacks to be deleted
-STACKS_TO_DELETE=()
+# List namespaces to be deleted
+NAMESPACES_TO_DELETE=()
 for i in $(seq 1 $TEAM_COUNT); do
     TEAM_ID=$(printf "team-%02d" $i)
-    STACK_NAME="${STACK_PREFIX}-${TEAM_ID}"
+    NAMESPACE="otel-demo-${TEAM_ID}"
 
-    # Check if stack exists
-    if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGION" &>/dev/null; then
-        STACKS_TO_DELETE+=("$STACK_NAME")
-        echo "  - $STACK_NAME"
+    # Check if namespace exists
+    if kubectl get namespace "$NAMESPACE" &>/dev/null; then
+        NAMESPACES_TO_DELETE+=("$NAMESPACE")
+        echo "  - $NAMESPACE"
     else
-        log_warn "Stack not found: $STACK_NAME"
+        log_warn "Namespace not found: $NAMESPACE"
     fi
 done
 
-if [[ ${#STACKS_TO_DELETE[@]} -eq 0 ]]; then
-    log_info "No stacks to delete."
+# Check for otel-demo namespace (created by manifest)
+if kubectl get namespace "otel-demo" &>/dev/null; then
+    NAMESPACES_TO_DELETE+=("otel-demo")
+    echo "  - otel-demo (from manifest)"
+fi
+
+if [[ "$DELETE_COLLECTOR" == "true" ]]; then
+    if kubectl get namespace "splunk-monitoring" &>/dev/null; then
+        echo "  - splunk-monitoring (Splunk OTel Collector)"
+    fi
+fi
+
+if [[ ${#NAMESPACES_TO_DELETE[@]} -eq 0 ]]; then
+    log_info "No namespaces to delete."
     exit 0
 fi
 
 # Confirm deletion
 if [[ "$FORCE" != "true" ]]; then
     echo ""
-    read -p "Are you sure you want to delete these ${#STACKS_TO_DELETE[@]} stacks? (y/N) " -n 1 -r
+    read -p "Are you sure you want to delete these namespaces? (y/N) " -n 1 -r
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         log_info "Cancelled."
@@ -114,41 +137,33 @@ if [[ "$FORCE" != "true" ]]; then
     fi
 fi
 
-# Delete stacks
-log_info "Deleting stacks..."
-declare -A DELETE_PIDS
+# Delete namespaces
+log_info "Deleting namespaces..."
 
-for STACK_NAME in "${STACKS_TO_DELETE[@]}"; do
-    log_info "Deleting $STACK_NAME..."
-    aws cloudformation delete-stack \
-        --stack-name "$STACK_NAME" \
-        --region "$REGION" &
-    DELETE_PIDS[$STACK_NAME]=$!
-    sleep 1
+for NAMESPACE in "${NAMESPACES_TO_DELETE[@]}"; do
+    log_info "Deleting $NAMESPACE..."
+    kubectl delete namespace "$NAMESPACE" --wait=false &
 done
 
+# Delete Splunk OTel Collector if requested
+if [[ "$DELETE_COLLECTOR" == "true" ]]; then
+    log_info "Deleting Splunk OTel Collector..."
+    helm uninstall splunk-otel-collector -n splunk-monitoring 2>/dev/null || true
+    kubectl delete namespace splunk-monitoring --wait=false 2>/dev/null || true
+fi
+
 # Wait for deletions
-log_info "Waiting for stack deletions to complete..."
-FAILED_DELETIONS=()
-
-for STACK_NAME in "${STACKS_TO_DELETE[@]}"; do
-    PID=${DELETE_PIDS[$STACK_NAME]}
-    wait $PID
-
-    # Wait for stack to be fully deleted
-    log_info "Waiting for $STACK_NAME to be deleted..."
-    aws cloudformation wait stack-delete-complete \
-        --stack-name "$STACK_NAME" \
-        --region "$REGION" 2>/dev/null || {
-            log_error "Failed to delete $STACK_NAME"
-            FAILED_DELETIONS+=("$STACK_NAME")
-        }
+log_info "Waiting for namespace deletions to complete..."
+for NAMESPACE in "${NAMESPACES_TO_DELETE[@]}"; do
+    kubectl wait --for=delete namespace/"$NAMESPACE" --timeout=300s 2>/dev/null || {
+        log_warn "Timeout waiting for $NAMESPACE deletion"
+    }
 done
 
 echo ""
-if [[ ${#FAILED_DELETIONS[@]} -gt 0 ]]; then
-    log_error "Failed deletions: ${FAILED_DELETIONS[*]}"
-    exit 1
-fi
+log_info "Cleanup completed!"
 
-log_info "All stacks deleted successfully!"
+# Show remaining namespaces
+echo ""
+log_info "Remaining game day namespaces:"
+kubectl get namespaces | grep -E "otel-demo|splunk-monitoring" || echo "  (none)"
