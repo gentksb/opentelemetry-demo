@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>o11y Game Day - 運営ダッシュボード</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f1a;
+      min-height: 100vh;
+      color: #fff;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 30px;
+    }
+    h1 {
+      font-size: 1.8rem;
+      color: #00d4ff;
+    }
+    .refresh-btn {
+      padding: 10px 20px;
+      background: rgba(0,212,255,0.2);
+      color: #00d4ff;
+      border: 1px solid #00d4ff;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .refresh-btn:hover {
+      background: rgba(0,212,255,0.3);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.05);
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: #00ff88;
+    }
+    .stat-label {
+      color: rgba(255,255,255,0.6);
+      margin-top: 5px;
+    }
+    .section-title {
+      font-size: 1.3rem;
+      margin-bottom: 15px;
+      color: #00d4ff;
+    }
+    .scoreboard {
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 30px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 15px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    th {
+      background: rgba(0,212,255,0.1);
+      color: #00d4ff;
+      font-weight: 600;
+    }
+    tr:hover {
+      background: rgba(255,255,255,0.03);
+    }
+    .rank {
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+    .rank-1 { color: #ffd700; }
+    .rank-2 { color: #c0c0c0; }
+    .rank-3 { color: #cd7f32; }
+    .stage-badge {
+      padding: 3px 10px;
+      border-radius: 15px;
+      font-size: 0.8rem;
+      background: #ff6b6b;
+    }
+    .stage-badge.stage-2 {
+      background: #ffd93d;
+      color: #333;
+    }
+    .question-progress {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 15px;
+    }
+    .progress-card {
+      background: rgba(255,255,255,0.05);
+      padding: 15px;
+      border-radius: 8px;
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .progress-service {
+      color: #5c6bc0;
+      font-weight: bold;
+    }
+    .progress-bar-container {
+      background: rgba(255,255,255,0.1);
+      border-radius: 5px;
+      height: 8px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      background: linear-gradient(90deg, #00d4ff, #00ff88);
+      height: 100%;
+      transition: width 0.5s;
+    }
+    .progress-text {
+      margin-top: 5px;
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+    .action-btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .action-btn.primary {
+      background: #00d4ff;
+      color: #000;
+    }
+    .action-btn.secondary {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+    .action-btn:hover {
+      opacity: 0.8;
+    }
+    .team-actions {
+      display: flex;
+      gap: 5px;
+    }
+    .team-actions button {
+      padding: 5px 10px;
+      font-size: 0.75rem;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .team-actions .advance {
+      background: #ffd93d;
+      color: #333;
+    }
+    .team-actions .reset {
+      background: #ff6b6b;
+      color: #fff;
+    }
+    #last-update {
+      color: rgba(255,255,255,0.5);
+      font-size: 0.85rem;
+    }
+    .create-team-form {
+      background: rgba(255,255,255,0.05);
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .create-team-form input {
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      flex: 1;
+    }
+    .create-team-form button {
+      padding: 10px 20px;
+      background: #00ff88;
+      color: #000;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>o11y Game Day - 運営ダッシュボード</h1>
+      <div>
+        <span id="last-update">-</span>
+        <button class="refresh-btn" onclick="loadData()">更新</button>
+      </div>
+    </header>
+
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-teams">-</div>
+        <div class="stat-label">チーム数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-correct">-</div>
+        <div class="stat-label">正解数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-avg-score">-</div>
+        <div class="stat-label">平均スコア</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-stage2">-</div>
+        <div class="stat-label">Stage 2 進出</div>
+      </div>
+    </div>
+
+    <div class="create-team-form">
+      <input type="text" id="new-team-name" placeholder="新しいチーム名">
+      <button onclick="createTeam()">チーム作成</button>
+    </div>
+
+    <div class="actions">
+      <button class="action-btn secondary" onclick="recalculateScores()">スコア再計算</button>
+    </div>
+
+    <h2 class="section-title">スコアボード</h2>
+    <div class="scoreboard">
+      <table>
+        <thead>
+          <tr>
+            <th>順位</th>
+            <th>チーム名</th>
+            <th>スコア</th>
+            <th>正解数</th>
+            <th>ステージ</th>
+            <th>最終更新</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="scoreboard-body">
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title">問題別正解率</h2>
+    <div class="question-progress" id="question-progress">
+    </div>
+  </div>
+
+  <script>
+    let autoRefreshInterval = null;
+
+    async function loadData() {
+      try {
+        // Load scoreboard
+        const scoreboardResponse = await fetch('/api/admin/scoreboard');
+        const scoreboardData = await scoreboardResponse.json();
+        renderScoreboard(scoreboardData);
+
+        // Load stats
+        const statsResponse = await fetch('/api/admin/stats');
+        const statsData = await statsResponse.json();
+        renderStats(statsData);
+
+        document.getElementById('last-update').textContent =
+          `最終更新: ${new Date().toLocaleTimeString('ja-JP')}`;
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    }
+
+    function renderStats(stats) {
+      document.getElementById('stat-teams').textContent = stats.total_teams;
+      document.getElementById('stat-correct').textContent = stats.total_correct_answers;
+      document.getElementById('stat-avg-score').textContent = stats.average_score;
+      document.getElementById('stat-stage2').textContent = stats.teams_in_stage2;
+
+      // Render question progress
+      const container = document.getElementById('question-progress');
+      container.innerHTML = stats.question_stats.map(q => `
+        <div class="progress-card">
+          <div class="progress-header">
+            <span class="progress-service">${q.service}</span>
+            <span>${q.completion_rate}%</span>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar" style="width: ${q.completion_rate}%"></div>
+          </div>
+          <div class="progress-text">${q.flag_name} - ${q.teams_completed}/${stats.total_teams} チーム正解</div>
+        </div>
+      `).join('');
+    }
+
+    function renderScoreboard(data) {
+      const tbody = document.getElementById('scoreboard-body');
+      tbody.innerHTML = data.teams.map(team => `
+        <tr>
+          <td class="rank rank-${team.rank <= 3 ? team.rank : ''}">${team.rank}</td>
+          <td>${team.team_name}<br><small style="color:#888">${team.team_id}</small></td>
+          <td style="font-weight:bold;color:#00ff88">${team.total_score}</td>
+          <td>${team.questions_correct}</td>
+          <td>
+            <span class="stage-badge ${team.current_stage === 2 ? 'stage-2' : ''}">
+              Stage ${team.current_stage}
+            </span>
+          </td>
+          <td><small>${team.last_activity ? new Date(team.last_activity).toLocaleString('ja-JP') : '-'}</small></td>
+          <td>
+            <div class="team-actions">
+              <button class="advance" onclick="advanceTeam('${team.team_id}')">Stage進行</button>
+              <button class="reset" onclick="resetTeam('${team.team_id}')">リセット</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function createTeam() {
+      const name = document.getElementById('new-team-name').value.trim();
+      if (!name) {
+        alert('チーム名を入力してください');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/teams', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ team_name: name })
+        });
+
+        if (response.ok) {
+          document.getElementById('new-team-name').value = '';
+          loadData();
+        } else {
+          alert('チームの作成に失敗しました');
+        }
+      } catch (error) {
+        console.error('Error creating team:', error);
+        alert('エラーが発生しました');
+      }
+    }
+
+    async function advanceTeam(teamId) {
+      if (!confirm(`${teamId}をStage 2に進めますか？`)) return;
+
+      try {
+        await fetch(`/api/admin/teams/${teamId}/advance-stage`, { method: 'POST' });
+        loadData();
+      } catch (error) {
+        console.error('Error advancing team:', error);
+      }
+    }
+
+    async function resetTeam(teamId) {
+      if (!confirm(`${teamId}の進行状況をリセットしますか？`)) return;
+
+      try {
+        await fetch(`/api/admin/teams/${teamId}/reset`, { method: 'POST' });
+        loadData();
+      } catch (error) {
+        console.error('Error resetting team:', error);
+      }
+    }
+
+    async function recalculateScores() {
+      try {
+        await fetch('/api/admin/recalculate-scores', { method: 'POST' });
+        loadData();
+        alert('スコアを再計算しました');
+      } catch (error) {
+        console.error('Error recalculating scores:', error);
+      }
+    }
+
+    // Initial load
+    loadData();
+
+    // Auto refresh every 10 seconds
+    autoRefreshInterval = setInterval(loadData, 10000);
+  </script>
+</body>
+</html>

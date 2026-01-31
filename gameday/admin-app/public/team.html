@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>o11y Game Day - チーム回答画面</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      color: #fff;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    header {
+      text-align: center;
+      padding: 30px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 30px;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 10px;
+      color: #00d4ff;
+    }
+    .team-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255,255,255,0.05);
+      padding: 15px 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    .team-name {
+      font-size: 1.2rem;
+      font-weight: bold;
+    }
+    .score {
+      font-size: 1.5rem;
+      color: #00ff88;
+    }
+    .stage-badge {
+      background: #ff6b6b;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+    }
+    .stage-badge.stage-2 {
+      background: #ffd93d;
+      color: #333;
+    }
+    .question-list {
+      display: grid;
+      gap: 15px;
+    }
+    .question-card {
+      background: rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 20px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .question-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+    }
+    .question-card.answered {
+      border-left: 4px solid #00ff88;
+      opacity: 0.7;
+    }
+    .question-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .question-service {
+      background: #5c6bc0;
+      padding: 3px 10px;
+      border-radius: 15px;
+      font-size: 0.8rem;
+    }
+    .question-points {
+      color: #ffd93d;
+      font-weight: bold;
+    }
+    .question-text {
+      font-size: 1.1rem;
+      margin-bottom: 15px;
+    }
+    .answer-form {
+      display: flex;
+      gap: 10px;
+    }
+    .answer-input {
+      flex: 1;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 1rem;
+    }
+    .answer-input::placeholder {
+      color: rgba(255,255,255,0.5);
+    }
+    .answer-input:focus {
+      outline: 2px solid #00d4ff;
+    }
+    .submit-btn {
+      padding: 10px 25px;
+      background: #00d4ff;
+      color: #000;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .submit-btn:hover {
+      background: #00a8cc;
+    }
+    .submit-btn:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+    .result-message {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+    }
+    .result-message.correct {
+      display: block;
+      background: rgba(0,255,136,0.2);
+      color: #00ff88;
+    }
+    .result-message.incorrect {
+      display: block;
+      background: rgba(255,107,107,0.2);
+      color: #ff6b6b;
+    }
+    .login-form {
+      max-width: 400px;
+      margin: 100px auto;
+      background: rgba(255,255,255,0.08);
+      padding: 40px;
+      border-radius: 15px;
+    }
+    .login-form h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .login-form input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 15px;
+      border: none;
+      border-radius: 5px;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 1rem;
+    }
+    .login-form button {
+      width: 100%;
+      padding: 12px;
+      background: #00d4ff;
+      color: #000;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    #loading {
+      text-align: center;
+      padding: 50px;
+    }
+    .spinner {
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top: 3px solid #00d4ff;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Login Form -->
+    <div id="login-section" class="login-form">
+      <h2>チームログイン</h2>
+      <input type="text" id="team-id-input" placeholder="チームID（例: team-01）">
+      <button onclick="login()">ログイン</button>
+    </div>
+
+    <!-- Main Content (hidden until login) -->
+    <div id="main-section" style="display: none;">
+      <header>
+        <h1>o11y Game Day</h1>
+        <p>Splunk Observability Cloud トラブルシューティングチャレンジ</p>
+      </header>
+
+      <div class="team-info">
+        <div>
+          <div class="team-name" id="team-name">-</div>
+          <small id="team-id-display">-</small>
+        </div>
+        <div class="score" id="total-score">0 点</div>
+        <div class="stage-badge" id="stage-badge">Stage 1</div>
+      </div>
+
+      <div id="loading">
+        <div class="spinner"></div>
+        <p>問題を読み込み中...</p>
+      </div>
+
+      <div id="question-list" class="question-list" style="display: none;"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentTeamId = null;
+
+    async function login() {
+      const teamId = document.getElementById('team-id-input').value.trim();
+      if (!teamId) {
+        alert('チームIDを入力してください');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/teams/${teamId}`);
+        if (!response.ok) {
+          alert('チームが見つかりません');
+          return;
+        }
+
+        currentTeamId = teamId;
+        localStorage.setItem('teamId', teamId);
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('main-section').style.display = 'block';
+        loadTeamData();
+      } catch (error) {
+        alert('エラーが発生しました');
+        console.error(error);
+      }
+    }
+
+    async function loadTeamData() {
+      try {
+        // Load team info
+        const teamResponse = await fetch(`/api/teams/${currentTeamId}`);
+        const team = await teamResponse.json();
+
+        document.getElementById('team-name').textContent = team.team_name;
+        document.getElementById('team-id-display').textContent = currentTeamId;
+        document.getElementById('total-score').textContent = `${team.total_score || 0} 点`;
+
+        const stageBadge = document.getElementById('stage-badge');
+        stageBadge.textContent = `Stage ${team.current_stage || 1}`;
+        if (team.current_stage === 2) {
+          stageBadge.classList.add('stage-2');
+        }
+
+        // Load questions
+        const questionsResponse = await fetch(`/api/questions?team_id=${currentTeamId}`);
+        const data = await questionsResponse.json();
+
+        renderQuestions(data.questions, data.progress);
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    }
+
+    function renderQuestions(questions, progress) {
+      const container = document.getElementById('question-list');
+      document.getElementById('loading').style.display = 'none';
+      container.style.display = 'grid';
+
+      container.innerHTML = questions.map(q => `
+        <div class="question-card ${q.answered ? 'answered' : ''}" id="q-${q.question_id}">
+          <div class="question-header">
+            <span class="question-service">${q.service}</span>
+            <span class="question-points">${q.base_points}点</span>
+          </div>
+          <div class="question-text">${q.question_text}</div>
+          ${q.answered ? `
+            <div class="result-message correct">正解済み</div>
+          ` : `
+            <div class="answer-form">
+              <input type="text" class="answer-input" id="answer-${q.question_id}"
+                     placeholder="回答を入力..." onkeypress="handleKeyPress(event, '${q.question_id}')">
+              <button class="submit-btn" onclick="submitAnswer('${q.question_id}')">送信</button>
+            </div>
+            <div class="result-message" id="result-${q.question_id}"></div>
+          `}
+        </div>
+      `).join('');
+    }
+
+    function handleKeyPress(event, questionId) {
+      if (event.key === 'Enter') {
+        submitAnswer(questionId);
+      }
+    }
+
+    async function submitAnswer(questionId) {
+      const input = document.getElementById(`answer-${questionId}`);
+      const answerText = input.value.trim();
+
+      if (!answerText) {
+        alert('回答を入力してください');
+        return;
+      }
+
+      const btn = input.nextElementSibling;
+      btn.disabled = true;
+      btn.textContent = '送信中...';
+
+      try {
+        const response = await fetch('/api/answers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            team_id: currentTeamId,
+            question_id: questionId,
+            answer_text: answerText
+          })
+        });
+
+        const result = await response.json();
+        const resultDiv = document.getElementById(`result-${questionId}`);
+
+        if (result.result === 'correct') {
+          resultDiv.className = 'result-message correct';
+          resultDiv.textContent = result.message;
+
+          // Update score
+          document.getElementById('total-score').textContent =
+            `${result.progress.totalScore} 点`;
+
+          // Mark question as answered
+          setTimeout(() => {
+            document.getElementById(`q-${questionId}`).classList.add('answered');
+            loadTeamData();
+          }, 1500);
+        } else {
+          resultDiv.className = 'result-message incorrect';
+          resultDiv.textContent = result.message;
+          btn.disabled = false;
+          btn.textContent = '送信';
+        }
+      } catch (error) {
+        console.error('Error submitting answer:', error);
+        alert('エラーが発生しました');
+        btn.disabled = false;
+        btn.textContent = '送信';
+      }
+    }
+
+    // Check for saved team ID on load
+    window.onload = function() {
+      const savedTeamId = localStorage.getItem('teamId');
+      if (savedTeamId) {
+        document.getElementById('team-id-input').value = savedTeamId;
+        login();
+      }
+    };
+  </script>
+</body>
+</html>
