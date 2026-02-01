@@ -9,7 +9,7 @@ set -e
 # Default values
 TEAM_COUNT=1
 CLUSTER_NAME="gameday-otel-demo"
-DELETE_COLLECTOR=false
+KEEP_COLLECTOR=false
 
 # Colors for output
 RED='\033[0;31m'
@@ -24,7 +24,7 @@ Usage: $0 [OPTIONS]
 Options:
   --team-count NUM       Number of team namespaces to delete (default: 1)
   --cluster-name NAME    EKS cluster name (default: gameday-otel-demo)
-  --delete-collector     Also delete Splunk OTel Collector
+  --keep-collector       Keep Splunk OTel Collector (default: delete all)
   --force                Skip confirmation prompt
   --help                 Show this help message
 
@@ -57,8 +57,8 @@ while [[ $# -gt 0 ]]; do
             CLUSTER_NAME="$2"
             shift 2
             ;;
-        --delete-collector)
-            DELETE_COLLECTOR=true
+        --keep-collector)
+            KEEP_COLLECTOR=true
             shift
             ;;
         --force)
@@ -115,10 +115,12 @@ if kubectl get namespace "otel-demo" &>/dev/null; then
     echo "  - otel-demo (from manifest)"
 fi
 
-if [[ "$DELETE_COLLECTOR" == "true" ]]; then
+if [[ "$KEEP_COLLECTOR" != "true" ]]; then
     if kubectl get namespace "splunk-monitoring" &>/dev/null; then
         echo "  - splunk-monitoring (Splunk OTel Collector)"
     fi
+else
+    log_info "(Splunk OTel Collector will be kept)"
 fi
 
 if [[ ${#NAMESPACES_TO_DELETE[@]} -eq 0 ]]; then
@@ -145,8 +147,8 @@ for NAMESPACE in "${NAMESPACES_TO_DELETE[@]}"; do
     kubectl delete namespace "$NAMESPACE" --wait=false &
 done
 
-# Delete Splunk OTel Collector if requested
-if [[ "$DELETE_COLLECTOR" == "true" ]]; then
+# Delete Splunk OTel Collector unless --keep-collector is specified
+if [[ "$KEEP_COLLECTOR" != "true" ]]; then
     log_info "Deleting Splunk OTel Collector..."
     helm uninstall splunk-otel-collector -n splunk-monitoring 2>/dev/null || true
     kubectl delete namespace splunk-monitoring --wait=false 2>/dev/null || true

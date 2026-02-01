@@ -204,13 +204,22 @@ for i in $(seq 1 $TEAM_COUNT); do
         kubectl apply -f -
 
     # Deploy OpenTelemetry Demo to the namespace
-    # Add team.id to OTEL_RESOURCE_ATTRIBUTES
     kubectl apply --namespace "$NAMESPACE" -f "$MANIFEST_FILE"
 
-    # Patch deployments to add team.id resource attribute
+    # Patch deployments to add team.id label and deployment.environment
+    log_info "Patching deployments with team identifier..."
     for DEPLOYMENT in $(kubectl get deployments -n "$NAMESPACE" -o name 2>/dev/null); do
+        DEPLOY_NAME=$(basename "$DEPLOYMENT")
+
+        # Add team-id label
         kubectl patch "$DEPLOYMENT" -n "$NAMESPACE" --type=json \
             -p="[{\"op\": \"add\", \"path\": \"/spec/template/metadata/labels/team-id\", \"value\": \"${TEAM_ID}\"}]" 2>/dev/null || true
+
+        # Add deployment.environment to OTEL_RESOURCE_ATTRIBUTES
+        # Find existing OTEL_RESOURCE_ATTRIBUTES and append team info
+        kubectl set env "$DEPLOYMENT" -n "$NAMESPACE" \
+            OTEL_RESOURCE_ATTRIBUTES="service.namespace=opentelemetry-demo,deployment.environment=${TEAM_ID}" \
+            2>/dev/null || true
     done
 
     log_info "${TEAM_ID} deployed successfully"
