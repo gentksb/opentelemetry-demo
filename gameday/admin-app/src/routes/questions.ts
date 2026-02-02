@@ -16,12 +16,17 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     // If team_id is provided, include their progress
-    let progress = null;
+    let progress: {
+      totalScore: number;
+      answeredQuestions: string[];
+      correctQuestions: string[];
+      currentStage: number;
+    } | null = null;
     if (team_id) {
       progress = await getTeamProgress(String(team_id));
 
       // Only show questions for current stage
-      questions = questions.filter((q) => q.stage <= progress.currentStage);
+      questions = questions.filter((q) => q.stage <= progress!.currentStage);
     }
 
     // Remove answer keywords for team view (security)

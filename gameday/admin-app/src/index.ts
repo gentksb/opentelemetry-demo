@@ -1,14 +1,15 @@
+// Load environment variables FIRST before any other imports
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
-import dotenv from 'dotenv';
 
 import teamsRouter from './routes/teams';
 import answersRouter from './routes/answers';
 import adminRouter from './routes/admin';
 import questionsRouter from './routes/questions';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;

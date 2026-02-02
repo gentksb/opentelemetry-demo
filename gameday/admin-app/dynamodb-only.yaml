@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  o11y Game Day Admin App - DynamoDB tables only (for local development)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+
+Resources:
+  TeamsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub gameday-teams-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: team_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: team_id
+          KeyType: HASH
+      Tags:
+        - Key: splunkit_data_classification
+          Value: public
+        - Key: splunkit_environment_type
+          Value: non-prd
+        - Key: Project
+          Value: o11y-gameday
+
+  AnswersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub gameday-answers-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: team_id
+          AttributeType: S
+        - AttributeName: question_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: team_id
+          KeyType: HASH
+        - AttributeName: question_id
+          KeyType: RANGE
+      Tags:
+        - Key: splunkit_data_classification
+          Value: public
+        - Key: splunkit_environment_type
+          Value: non-prd
+        - Key: Project
+          Value: o11y-gameday
+
+  QuestionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub gameday-questions-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: question_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: question_id
+          KeyType: HASH
+      Tags:
+        - Key: splunkit_data_classification
+          Value: public
+        - Key: splunkit_environment_type
+          Value: non-prd
+        - Key: Project
+          Value: o11y-gameday
+
+Outputs:
+  TeamsTableName:
+    Description: DynamoDB Teams Table Name
+    Value: !Ref TeamsTable
+
+  AnswersTableName:
+    Description: DynamoDB Answers Table Name
+    Value: !Ref AnswersTable
+
+  QuestionsTableName:
+    Description: DynamoDB Questions Table Name
+    Value: !Ref QuestionsTable
