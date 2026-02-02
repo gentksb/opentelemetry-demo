@@ -24,18 +24,25 @@
 
 ## 実装ステップ
 
-### ステップ1: Kubernetesデプロイ確認 🔄 要再検証
+### ステップ1: Kubernetesデプロイ確認 ✅ 完了
 
 **目的**: splunk/opentelemetry-demoでSplunk Observability Cloudへのテレメトリ送信を確認
 
 **実施内容**:
-- EKSクラスタにsplunk-astronomy-shopマニフェストをデプロイ
+- kindクラスタにsplunk-astronomy-shopマニフェストをデプロイ
 - `workshop-secret`でSplunk認証情報を設定
-- Splunk OTel Collector経由でテレメトリ送信確認
+- Splunk OTel Collector (Helm) 経由でテレメトリ送信確認
+
+**検証結果** (2026-02-02):
+- [x] kindクラスタ起動
+- [x] `kubernetes/splunk-astronomy-shop-1.5.5.yaml` デプロイ成功
+- [x] Splunk OTel Collector (Helm) インストール成功
+- [x] Infrastructure Monitoring でクラスタ表示確認
+- [x] APM でトレース受信確認
 
 **使用マニフェスト**: `kubernetes/splunk-astronomy-shop-1.5.5.yaml`
 
-**必要なSecret** (`kubernetes/example-secrets.yaml`参照):
+**必要なSecret** (`kubernetes/secrets.yaml` - gitignore対象):
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -45,15 +52,12 @@ stringData:
   realm: jp0
   access_token: <SPLUNK_ACCESS_TOKEN>
   env: <deployment-environment>
+  # ... その他オプション設定
 ```
-
-**Todo**:
-- [ ] splunk/opentelemetry-demoマニフェストでのデプロイ検証
-- [ ] Splunk Observability Cloudでのテレメトリ受信確認
 
 ---
 
-### ステップ2: EKSデプロイスクリプト 🔄 要更新
+### ステップ2: EKSデプロイスクリプト ✅ 更新完了
 
 **目的**: チーム数分のnamespaceを一括デプロイ
 
@@ -62,10 +66,17 @@ stringData:
 gameday/
 └── infra/
     ├── template.yaml          # EKSクラスタ用SAMテンプレート
-    ├── deploy-teams.sh        # チームデプロイスクリプト
+    ├── deploy-teams.sh        # チームデプロイスクリプト（更新済み）
     ├── cleanup-teams.sh       # クリーンアップスクリプト
     └── list-teams.sh          # チーム一覧表示
 ```
+
+**更新内容** (2026-02-02):
+- [x] マニフェストパスを `kubernetes/splunk-astronomy-shop-*.yaml` に変更
+- [x] `workshop-secret` 自動作成機能を追加
+- [x] `local-path` StorageClass 自動作成（kind対応）
+- [x] `--manifest-version` オプション追加
+- [x] `--rum-token` オプション追加
 
 **デプロイコマンド**:
 ```bash
@@ -77,8 +88,7 @@ sam deploy --stack-name gameday-eks ...
 ```
 
 **Todo**:
-- [ ] splunk/opentelemetry-demoマニフェストに対応したデプロイスクリプト更新
-- [ ] namespace分離でのチームデプロイ検証
+- [ ] EKS環境でのnamespace分離デプロイ検証
 
 ---
 
@@ -178,8 +188,9 @@ gameday/
 - `kubernetes/splunk-astronomy-shop-1.5.5.yaml` - Kubernetesマニフェスト（推奨版）
 - `kubernetes/splunk-astronomy-shop-1.6.0-values.yaml` - Helm values（最新）
 - `kubernetes/example-secrets.yaml` - Secret設定例
+- `kubernetes/secrets.yaml` - 実際のSecret（gitignore対象）
 - `src/flagd/demo.flagd.json` - Feature Flag定義
-- `gameday/infra/` - EKSデプロイスクリプト
+- `gameday/infra/` - デプロイスクリプト
 - `gameday/admin-app/` - イベント運営アプリ
 
 ## タグ要件

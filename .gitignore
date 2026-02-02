@@ -82,3 +82,4 @@ gameday/infra/.aws-sam/
 gameday/infra/deployment-results.txt
 gameday/admin-app/node_modules/
 gameday/admin-app/dist/
+kubernetes/secrets.yaml

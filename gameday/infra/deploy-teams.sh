@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# deploy-teams.sh - Deploy o11y Game Day team namespaces to EKS
+# deploy-teams.sh - Deploy o11y Game Day team namespaces to Kubernetes
 #
 # Usage: ./deploy-teams.sh --team-count 5 --splunk-token xxx --splunk-realm jp0
 
@@ -11,6 +11,7 @@ TEAM_COUNT=1
 SPLUNK_REALM="jp0"
 CLUSTER_NAME="gameday-otel-demo"
 REGION="ap-northeast-1"
+MANIFEST_VERSION="1.5.5"
 
 # Colors for output
 RED='\033[0;31m'
@@ -27,13 +28,15 @@ print_usage() {
 Usage: $0 [OPTIONS]
 
 Required Options:
-  --team-count NUM       Number of teams to deploy (default: 1)
   --splunk-token TOKEN   Splunk Observability Cloud access token
 
 Optional:
+  --team-count NUM       Number of teams to deploy (default: 1)
   --splunk-realm REALM   Splunk realm (default: jp0)
-  --cluster-name NAME    EKS cluster name (default: gameday-otel-demo)
+  --rum-token TOKEN      Splunk RUM token (optional)
+  --cluster-name NAME    Kubernetes cluster name (default: gameday-otel-demo)
   --region REGION        AWS region (default: ap-northeast-1)
+  --manifest-version VER Manifest version (default: 1.5.5)
   --skip-collector       Skip Splunk OTel Collector installation
   --dry-run              Show what would be deployed without deploying
   --help                 Show this help message
@@ -75,12 +78,20 @@ while [[ $# -gt 0 ]]; do
             SPLUNK_REALM="$2"
             shift 2
             ;;
+        --rum-token)
+            RUM_TOKEN="$2"
+            shift 2
+            ;;
         --cluster-name)
             CLUSTER_NAME="$2"
             shift 2
             ;;
         --region)
             REGION="$2"
+            shift 2
+            ;;
+        --manifest-version)
+            MANIFEST_VERSION="$2"
             shift 2
             ;;
         --skip-collector)
@@ -126,7 +137,16 @@ fi
 log_step "Verifying cluster connection..."
 if ! kubectl cluster-info &> /dev/null; then
     log_error "Cannot connect to Kubernetes cluster"
-    log_info "Run: aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${REGION}"
+    log_info "For EKS: aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${REGION}"
+    exit 1
+fi
+
+# Check manifest file
+MANIFEST_FILE="${REPO_ROOT}/kubernetes/splunk-astronomy-shop-${MANIFEST_VERSION}.yaml"
+if [[ ! -f "$MANIFEST_FILE" ]]; then
+    log_error "Manifest file not found: $MANIFEST_FILE"
+    log_info "Available manifests:"
+    ls -1 "${REPO_ROOT}/kubernetes/splunk-astronomy-shop-"*.yaml 2>/dev/null || echo "  None found"
     exit 1
 fi
 
@@ -135,11 +155,32 @@ log_info "Cluster: ${CLUSTER_NAME}"
 log_info "Region: ${REGION}"
 log_info "Teams to deploy: ${TEAM_COUNT}"
 log_info "Splunk realm: ${SPLUNK_REALM}"
+log_info "Manifest: splunk-astronomy-shop-${MANIFEST_VERSION}.yaml"
 echo ""
 
 if [[ "$DRY_RUN" == "true" ]]; then
     log_warn "DRY RUN MODE - No changes will be made"
     echo ""
+fi
+
+# Ensure local-path StorageClass exists (for kind clusters)
+log_step "Checking StorageClass..."
+if ! kubectl get storageclass local-path &> /dev/null; then
+    if kubectl get storageclass standard &> /dev/null; then
+        log_info "Creating local-path StorageClass alias..."
+        if [[ "$DRY_RUN" != "true" ]]; then
+            PROVISIONER=$(kubectl get storageclass standard -o jsonpath='{.provisioner}')
+            kubectl create -f - <<EOF
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-path
+provisioner: ${PROVISIONER}
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+EOF
+        fi
+    fi
 fi
 
 # Install Splunk OTel Collector (shared)
@@ -154,8 +195,7 @@ if [[ "$SKIP_COLLECTOR" != "true" ]]; then
             --set="splunkObservability.accessToken=${SPLUNK_TOKEN}" \
             --set="splunkObservability.realm=${SPLUNK_REALM}" \
             --set="clusterName=${CLUSTER_NAME}" \
-            --set="agent.enabled=true" \
-            --set="gateway.enabled=false" \
+            --set="environment=${CLUSTER_NAME}" \
             --namespace splunk-monitoring \
             --create-namespace \
             --wait
@@ -166,15 +206,6 @@ if [[ "$SKIP_COLLECTOR" != "true" ]]; then
     fi
 fi
 
-# Deploy teams
-log_step "Deploying team namespaces..."
-
-MANIFEST_FILE="${REPO_ROOT}/splunk/opentelemetry-demo.yaml"
-if [[ ! -f "$MANIFEST_FILE" ]]; then
-    log_error "Manifest file not found: $MANIFEST_FILE"
-    exit 1
-fi
-
 # Store deployment results
 OUTPUT_FILE="${SCRIPT_DIR}/deployment-results.txt"
 echo "# o11y Game Day Deployment Results" > "$OUTPUT_FILE"
@@ -182,9 +213,13 @@ echo "# Generated: $(date)" >> "$OUTPUT_FILE"
 echo "# Cluster: ${CLUSTER_NAME}" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
+# Deploy teams
+log_step "Deploying team namespaces..."
+
 for i in $(seq 1 $TEAM_COUNT); do
     TEAM_ID=$(printf "team-%02d" $i)
     NAMESPACE="otel-demo-${TEAM_ID}"
+    TEAM_ENV="${CLUSTER_NAME}-${TEAM_ID}"
 
     log_info "Deploying ${TEAM_ID} to namespace ${NAMESPACE}..."
 
@@ -203,6 +238,27 @@ for i in $(seq 1 $TEAM_COUNT); do
             --overwrite -o yaml | \
         kubectl apply -f -
 
+    # Create workshop-secret for this team
+    log_info "Creating workshop-secret for ${TEAM_ID}..."
+    kubectl create secret generic workshop-secret \
+        --namespace "$NAMESPACE" \
+        --from-literal=instance="${TEAM_ID}-shop-demo" \
+        --from-literal=app="${TEAM_ID}-store" \
+        --from-literal=env="${TEAM_ENV}" \
+        --from-literal=deployment="deployment.environment=${TEAM_ENV}" \
+        --from-literal=realm="${SPLUNK_REALM}" \
+        --from-literal=access_token="${SPLUNK_TOKEN}" \
+        --from-literal=api_token="${SPLUNK_TOKEN}" \
+        --from-literal=rum_token="${RUM_TOKEN:-}" \
+        --from-literal=hec_token="" \
+        --from-literal=hec_url="" \
+        --from-literal=url="" \
+        --from-literal=appd_token="" \
+        --from-literal=flagd_auth="false" \
+        --from-literal=flagd_user="" \
+        --from-literal=flagd_pw="" \
+        --dry-run=client -o yaml | kubectl apply -f -
+
     # Deploy OpenTelemetry Demo to the namespace
     kubectl apply --namespace "$NAMESPACE" -f "$MANIFEST_FILE"
 
@@ -216,20 +272,18 @@ for i in $(seq 1 $TEAM_COUNT); do
             -p="[{\"op\": \"add\", \"path\": \"/spec/template/metadata/labels/team-id\", \"value\": \"${TEAM_ID}\"}]" 2>/dev/null || true
 
         # Add deployment.environment to OTEL_RESOURCE_ATTRIBUTES
-        # Find existing OTEL_RESOURCE_ATTRIBUTES and append team info
         kubectl set env "$DEPLOYMENT" -n "$NAMESPACE" \
-            OTEL_RESOURCE_ATTRIBUTES="service.namespace=opentelemetry-demo,deployment.environment=${TEAM_ID}" \
+            OTEL_RESOURCE_ATTRIBUTES="service.namespace=opentelemetry-demo,deployment.environment=${TEAM_ENV}" \
             2>/dev/null || true
     done
 
     log_info "${TEAM_ID} deployed successfully"
-    echo "${TEAM_ID},${NAMESPACE}" >> "$OUTPUT_FILE"
+    echo "${TEAM_ID},${NAMESPACE},${TEAM_ENV}" >> "$OUTPUT_FILE"
 done
 
 echo ""
-log_step "Setting up ingress for each team..."
+log_step "Checking deployment status..."
 
-# Create ingress resources for each team (using NodePort or LoadBalancer)
 for i in $(seq 1 $TEAM_COUNT); do
     TEAM_ID=$(printf "team-%02d" $i)
     NAMESPACE="otel-demo-${TEAM_ID}"
@@ -238,12 +292,17 @@ for i in $(seq 1 $TEAM_COUNT); do
         continue
     fi
 
-    # Get the NodePort for frontend-proxy
-    NODE_PORT=$(kubectl get svc frontend-proxy -n "$NAMESPACE" -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "")
+    # Get frontend-proxy service info
+    SVC_TYPE=$(kubectl get svc frontend-proxy -n "$NAMESPACE" -o jsonpath='{.spec.type}' 2>/dev/null || echo "")
 
-    if [[ -n "$NODE_PORT" ]]; then
-        log_info "${TEAM_ID}: NodePort ${NODE_PORT}"
-        echo "${TEAM_ID},${NAMESPACE},${NODE_PORT}" >> "$OUTPUT_FILE"
+    if [[ "$SVC_TYPE" == "LoadBalancer" ]]; then
+        EXTERNAL_IP=$(kubectl get svc frontend-proxy -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
+        log_info "${TEAM_ID}: LoadBalancer - ${EXTERNAL_IP}"
+    elif [[ "$SVC_TYPE" == "NodePort" ]]; then
+        NODE_PORT=$(kubectl get svc frontend-proxy -n "$NAMESPACE" -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "")
+        log_info "${TEAM_ID}: NodePort - ${NODE_PORT}"
+    else
+        log_info "${TEAM_ID}: ClusterIP - use port-forward"
     fi
 done
 
@@ -254,11 +313,15 @@ log_info "Results saved to: ${OUTPUT_FILE}"
 if [[ "$DRY_RUN" != "true" ]]; then
     echo ""
     log_info "Team namespaces deployed:"
-    kubectl get namespaces -l project=o11y-gameday --no-headers | awk '{print "  - " $1}'
+    kubectl get namespaces -l project=o11y-gameday --no-headers 2>/dev/null | awk '{print "  - " $1}' || echo "  None"
 
     echo ""
     log_info "To access a team's frontend:"
     log_info "  kubectl port-forward -n otel-demo-team-01 svc/frontend-proxy 8080:8080"
+
+    echo ""
+    log_info "To view in Splunk APM, filter by environment:"
+    log_info "  deployment.environment = ${CLUSTER_NAME}-team-01"
 fi
 
 log_info "Deployment completed successfully!"
