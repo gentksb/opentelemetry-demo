@@ -10,10 +10,18 @@
 ## 技術選定
 
 - **リポジトリ**: splunk/opentelemetry-demo（Kubernetesデプロイ専用）
-- **インフラ**: AWS EKS (namespace分離方式)
+- **インフラ**: AWS EC2 + kind (namespace分離方式)
 - **IaC**: AWS SAM
 - **管理アプリ**: Express.js + DynamoDB
 - **リージョン**: ap-northeast-1 (東京)
+
+### インフラ選定理由 (2026-02-02)
+
+EKSからEC2 + kindへ変更した理由:
+- EKSではEBS CSIドライバーのIRSA設定が複雑
+- Game Dayは一時的なイベント用途でマネージドサービスのメリットが薄い
+- ローカルkindで動作確認済みの構成をそのまま利用可能
+- コスト効率が良い（EKSコントロールプレーン費用不要）
 
 ## リポジトリ移行履歴
 
@@ -57,7 +65,7 @@ stringData:
 
 ---
 
-### ステップ2: EKSデプロイスクリプト ✅ 更新完了
+### ステップ2: EC2 + kindデプロイ ✅ 検証完了
 
 **目的**: チーム数分のnamespaceを一括デプロイ
 
@@ -65,30 +73,51 @@ stringData:
 ```
 gameday/
 └── infra/
-    ├── template.yaml          # EKSクラスタ用SAMテンプレート
-    ├── deploy-teams.sh        # チームデプロイスクリプト（更新済み）
-    ├── cleanup-teams.sh       # クリーンアップスクリプト
-    └── list-teams.sh          # チーム一覧表示
+    ├── ec2-kind-template.yaml  # EC2 + kind用SAMテンプレート
+    ├── template.yaml           # (旧) EKSクラスタ用SAMテンプレート
+    ├── deploy-teams.sh         # チームデプロイスクリプト
+    ├── cleanup-teams.sh        # クリーンアップスクリプト
+    └── list-teams.sh           # チーム一覧表示
 ```
 
-**更新内容** (2026-02-02):
-- [x] マニフェストパスを `kubernetes/splunk-astronomy-shop-*.yaml` に変更
-- [x] `workshop-secret` 自動作成機能を追加
-- [x] `local-path` StorageClass 自動作成（kind対応）
-- [x] `--manifest-version` オプション追加
-- [x] `--rum-token` オプション追加
+**EC2 + kind構成** (2026-02-02):
+- [x] EC2インスタンス (m5.2xlarge) でkindクラスタを実行
+- [x] UserDataでDocker, kind, kubectl, Helmを自動インストール
+- [x] Splunk OTel Collector (Helm) 自動インストール
+- [x] `workshop-secret` 自動作成機能
+- [x] NodePortでフロントエンド公開 (port 30080 → 8080)
 
 **デプロイコマンド**:
 ```bash
-# EKSクラスタ作成
-sam deploy --stack-name gameday-eks ...
+# EC2 + kindスタック作成
+sam deploy --template-file ec2-kind-template.yaml \
+  --stack-name gameday-kind \
+  --parameter-overrides \
+    InstanceType=m5.2xlarge \
+    KeyName=tgen-key \
+    SplunkAccessToken=xxx \
+    SplunkRealm=jp0 \
+    TeamCount=1 \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region ap-northeast-1
 
-# チームデプロイ
-./gameday/infra/deploy-teams.sh --team-count 5 --splunk-token xxx --splunk-realm jp0
+# SSHでEC2に接続後、チームデプロイ
+./deploy-teams.sh --team-count 5 --splunk-token xxx --splunk-realm jp0
 ```
 
-**Todo**:
-- [ ] EKS環境でのnamespace分離デプロイ検証
+**検証結果** (2026-02-02):
+- [x] EC2インスタンス起動
+- [x] kindクラスタ作成
+- [x] Splunk OTel Collector動作確認
+- [x] デモアプリ (23/25 pods) 稼働
+- [x] フロントエンドアクセス確認 (HTTP 200)
+- [x] `/feature` (flagd-ui) アクセス確認 (HTTP 200) - メモリ2560MiBで動作
+
+**注意点**:
+- マニフェスト内の `storageClassName: local-path` を `standard` に変更が必要
+- shop-dc-shim コンポーネント (namespace: default固定) はスキップされる
+- **flagd-ui メモリ問題** (2026-02-02 解決): EC2 (32GB) 環境でErlang VM (beam.smp) がホストメモリを参照して過剰なメモリ割り当てを行い、デフォルト250MiBでOOMKilled発生。2560MiBに増加で解決
+- frontend-proxyはNodePortに変更が必要 (port 30080+チーム番号)
 
 ---
 
@@ -159,7 +188,7 @@ gameday/
 - 最低得点: 10点（正解時）
 
 **Todo**:
-- [ ] Feature Flag有効化テスト（EKS環境で）
+- [ ] Feature Flag有効化テスト（EC2 + kind環境で）
 
 ---
 
@@ -190,7 +219,8 @@ gameday/
 - `kubernetes/example-secrets.yaml` - Secret設定例
 - `kubernetes/secrets.yaml` - 実際のSecret（gitignore対象）
 - `src/flagd/demo.flagd.json` - Feature Flag定義
-- `gameday/infra/` - デプロイスクリプト
+- `gameday/infra/ec2-kind-template.yaml` - EC2 + kind SAMテンプレート
+- `gameday/infra/deploy-teams.sh` - チームデプロイスクリプト
 - `gameday/admin-app/` - イベント運営アプリ
 
 ## タグ要件

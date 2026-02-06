@@ -277,6 +277,21 @@ for i in $(seq 1 $TEAM_COUNT); do
             2>/dev/null || true
     done
 
+    # Fix for EC2 environment: Increase flagd-ui memory limit
+    # Erlang VM detects host memory (32GB on m5.2xlarge) and allocates accordingly,
+    # causing OOMKilled with default 250Mi limit
+    log_info "Patching flagd-ui memory limit for EC2 environment..."
+    kubectl patch deploy flagd-ui -n "$NAMESPACE" --type=json \
+        -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": "2560Mi"}]' \
+        2>/dev/null || true
+
+    # Fix for kind: Expose frontend-proxy as NodePort for external access
+    log_info "Patching frontend-proxy to NodePort..."
+    NODE_PORT=$((30080 + i - 1))
+    kubectl patch svc frontend-proxy -n "$NAMESPACE" \
+        -p "{\"spec\": {\"type\": \"NodePort\", \"ports\": [{\"port\": 8080, \"targetPort\": 8080, \"nodePort\": ${NODE_PORT}}]}}" \
+        2>/dev/null || true
+
     log_info "${TEAM_ID} deployed successfully"
     echo "${TEAM_ID},${NAMESPACE},${TEAM_ENV}" >> "$OUTPUT_FILE"
 done

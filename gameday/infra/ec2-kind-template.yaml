@@ -1,0 +1,321 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  EC2 instance with kind for o11y Game Day.
+  Runs a local Kubernetes cluster using kind on a single EC2 instance.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: m5.2xlarge
+    Description: EC2 instance type (needs enough resources for multiple teams)
+    AllowedValues:
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m6i.xlarge
+      - m6i.2xlarge
+      - m6i.4xlarge
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair for SSH access
+
+  AllowedSSHCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR block allowed for SSH access
+
+  SplunkAccessToken:
+    Type: String
+    NoEcho: true
+    Description: Splunk Observability Cloud access token
+
+  SplunkRealm:
+    Type: String
+    Default: jp0
+    Description: Splunk realm
+
+  TeamCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 10
+    Description: Number of teams to deploy
+
+Mappings:
+  RegionAMI:
+    ap-northeast-1:
+      AMI: ami-0e5b755eb72aa63d9  # Amazon Linux 2023 (latest)
+    us-east-1:
+      AMI: ami-0c7217cdde317cfec
+    us-west-2:
+      AMI: ami-008fe2fc65df48dac
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: gameday-kind-vpc
+        - Key: splunkit_data_classification
+          Value: public
+        - Key: splunkit_environment_type
+          Value: non-prd
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: gameday-kind-igw
+        - Key: splunkit_data_classification
+          Value: public
+        - Key: splunkit_environment_type
+          Value: non-prd
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: gameday-kind-public-subnet
+        - Key: splunkit_data_classification
+          Value: public
+        - Key: splunkit_environment_type
+          Value: non-prd
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: gameday-kind-public-rt
+        - Key: splunkit_data_classification
+          Value: public
+        - Key: splunkit_environment_type
+          Value: non-prd
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Game Day kind instance
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSSHCidr
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP access
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS access
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8099
+          CidrIp: 0.0.0.0/0
+          Description: Frontend proxy ports for teams
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: gameday-kind-sg
+        - Key: splunkit_data_classification
+          Value: public
+        - Key: splunkit_environment_type
+          Value: non-prd
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: gameday-kind-instance-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: splunkit_data_classification
+          Value: public
+        - Key: splunkit_environment_type
+          Value: non-prd
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref InstanceRole
+
+  GameDayInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: AttachGateway
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [RegionAMI, !Ref 'AWS::Region', AMI]
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref InstanceProfile
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 100
+            VolumeType: gp3
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          exec > >(tee /var/log/user-data.log) 2>&1
+
+          echo "=== Starting Game Day setup ==="
+
+          # Update system
+          dnf update -y
+
+          # Install Docker
+          dnf install -y docker git
+          systemctl enable docker
+          systemctl start docker
+          usermod -aG docker ec2-user
+
+          # Install kubectl
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          mv kubectl /usr/local/bin/
+
+          # Install kind
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+          chmod +x ./kind
+          mv ./kind /usr/local/bin/kind
+
+          # Install Helm
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+          # Create kind cluster with extra port mappings
+          cat <<EOF > /home/ec2-user/kind-config.yaml
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+          - role: control-plane
+            extraPortMappings:
+            - containerPort: 80
+              hostPort: 80
+              protocol: TCP
+            - containerPort: 443
+              hostPort: 443
+              protocol: TCP
+            - containerPort: 30080
+              hostPort: 8080
+              protocol: TCP
+            - containerPort: 30081
+              hostPort: 8081
+              protocol: TCP
+            - containerPort: 30082
+              hostPort: 8082
+              protocol: TCP
+            - containerPort: 30083
+              hostPort: 8083
+              protocol: TCP
+            - containerPort: 30084
+              hostPort: 8084
+              protocol: TCP
+          EOF
+          chown ec2-user:ec2-user /home/ec2-user/kind-config.yaml
+
+          # Create kind cluster as ec2-user
+          sudo -u ec2-user kind create cluster --name gameday --config /home/ec2-user/kind-config.yaml
+
+          # Copy kubeconfig
+          mkdir -p /home/ec2-user/.kube
+          cp /root/.kube/config /home/ec2-user/.kube/config 2>/dev/null || \
+            sudo -u ec2-user kind get kubeconfig --name gameday > /home/ec2-user/.kube/config
+          chown -R ec2-user:ec2-user /home/ec2-user/.kube
+
+          # Create local-path storage class (default in kind)
+          sudo -u ec2-user kubectl get sc local-path || echo "local-path SC already exists"
+
+          # Store Splunk credentials
+          cat <<EOF > /home/ec2-user/splunk-config.env
+          SPLUNK_ACCESS_TOKEN=${SplunkAccessToken}
+          SPLUNK_REALM=${SplunkRealm}
+          TEAM_COUNT=${TeamCount}
+          EOF
+          chmod 600 /home/ec2-user/splunk-config.env
+          chown ec2-user:ec2-user /home/ec2-user/splunk-config.env
+
+          # Clone repository for deploy scripts
+          sudo -u ec2-user git clone https://github.com/splunk/opentelemetry-demo.git /home/ec2-user/opentelemetry-demo || true
+
+          echo "=== Game Day setup complete ==="
+          echo "Run: source /home/ec2-user/splunk-config.env && ./deploy-teams.sh"
+      Tags:
+        - Key: Name
+          Value: gameday-kind-instance
+        - Key: splunkit_data_classification
+          Value: public
+        - Key: splunkit_environment_type
+          Value: non-prd
+
+Outputs:
+  InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref GameDayInstance
+
+  PublicIP:
+    Description: Public IP address of the instance
+    Value: !GetAtt GameDayInstance.PublicIp
+
+  PublicDNS:
+    Description: Public DNS name of the instance
+    Value: !GetAtt GameDayInstance.PublicDnsName
+
+  SSHCommand:
+    Description: SSH command to connect to the instance
+    Value: !Sub 'ssh -i ${KeyName}.pem ec2-user@${GameDayInstance.PublicIp}'
+
+  FrontendURL:
+    Description: Frontend URL (after deployment)
+    Value: !Sub 'http://${GameDayInstance.PublicIp}:8080'
