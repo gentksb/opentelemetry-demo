@@ -260,7 +260,10 @@ for i in $(seq 1 $TEAM_COUNT); do
         --dry-run=client -o yaml | kubectl apply -f -
 
     # Deploy OpenTelemetry Demo to the namespace
-    kubectl apply --namespace "$NAMESPACE" -f "$MANIFEST_FILE"
+    # Note: Some resources (e.g., shop-dc-shim) have namespace: default hardcoded
+    # and will fail with namespace mismatch errors. These are safely ignored.
+    kubectl apply --namespace "$NAMESPACE" -f "$MANIFEST_FILE" 2>&1 | \
+        grep -v "does not match the namespace" || true
 
     # Patch deployments to add team.id label and deployment.environment
     log_info "Patching deployments with team identifier..."

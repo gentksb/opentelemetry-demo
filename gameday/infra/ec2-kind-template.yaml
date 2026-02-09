@@ -287,10 +287,13 @@ Resources:
           chown ec2-user:ec2-user /home/ec2-user/splunk-config.env
 
           # Clone repository for deploy scripts
-          sudo -u ec2-user git clone https://github.com/splunk/opentelemetry-demo.git /home/ec2-user/opentelemetry-demo || true
+          # Note: gameday/ directory is on the tgen/o11y-gameday branch
+          sudo -u ec2-user git clone -b tgen/o11y-gameday https://github.com/splunk/opentelemetry-demo.git /home/ec2-user/opentelemetry-demo || \
+            sudo -u ec2-user git clone https://github.com/splunk/opentelemetry-demo.git /home/ec2-user/opentelemetry-demo || true
 
           echo "=== Game Day setup complete ==="
-          echo "Run: source /home/ec2-user/splunk-config.env && ./deploy-teams.sh"
+          echo "To deploy teams via SSM or SSH:"
+          echo "  cd /home/ec2-user/opentelemetry-demo && ./gameday/infra/deploy-teams.sh --team-count ${TeamCount} --splunk-token <TOKEN> --splunk-realm ${SplunkRealm}"
       Tags:
         - Key: Name
           Value: gameday-kind-instance

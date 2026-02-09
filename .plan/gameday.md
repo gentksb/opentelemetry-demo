@@ -89,20 +89,31 @@ gameday/
 
 **デプロイコマンド**:
 ```bash
-# EC2 + kindスタック作成
-sam deploy --template-file ec2-kind-template.yaml \
+# EC2 + kindスタック作成（CloudFormation直接使用）
+aws cloudformation deploy \
+  --template-file gameday/infra/ec2-kind-template.yaml \
   --stack-name gameday-kind \
+  --region ap-northeast-1 \
+  --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     InstanceType=m5.2xlarge \
     KeyName=tgen-key \
     SplunkAccessToken=xxx \
     SplunkRealm=jp0 \
     TeamCount=1 \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region ap-northeast-1
+  --tags \
+    splunkit_data_classification=public \
+    splunkit_environment_type=non-prd \
+    Project=o11y-gameday
 
-# SSHでEC2に接続後、チームデプロイ
-./deploy-teams.sh --team-count 5 --splunk-token xxx --splunk-realm jp0
+# EC2のUserData完了後、SSMでチームデプロイ
+# （gameday/ディレクトリがtgen/o11y-gamedayブランチにあるため、
+#   mainブランチからcloneした場合はSSMで直接コマンド実行する）
+aws ssm send-command \
+  --instance-ids <INSTANCE_ID> \
+  --document-name "AWS-RunShellScript" \
+  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh --team-count 1 --splunk-token xxx --splunk-realm jp0"]}' \
+  --region ap-northeast-1
 ```
 
 **検証結果** (2026-02-02):
@@ -113,11 +124,19 @@ sam deploy --template-file ec2-kind-template.yaml \
 - [x] フロントエンドアクセス確認 (HTTP 200)
 - [x] `/feature` (flagd-ui) アクセス確認 (HTTP 200) - メモリ2560MiBで動作
 
+**検証結果** (2026-02-09):
+- [x] CloudFormation直接デプロイ成功（`aws cloudformation deploy`）
+- [x] SSM経由でチームデプロイ成功
+- [x] 管理アプリ（ECS Express Mode）並行デプロイ成功
+- [x] 23/25 pods Running（fraud-detection 2pods は SQL Server Init待ち）
+- [x] フロントエンド HTTP 200、Feature Flag UI HTTP 200
+
 **注意点**:
-- マニフェスト内の `storageClassName: local-path` を `standard` に変更が必要
-- shop-dc-shim コンポーネント (namespace: default固定) はスキップされる
+- `local-path` StorageClassがkindに存在しない場合がある → deploy-teams.shが自動作成する
+- shop-dc-shim コンポーネント (namespace: default固定) はスキップされる → deploy-teams.shで`grep -v`で警告抑制
 - **flagd-ui メモリ問題** (2026-02-02 解決): EC2 (32GB) 環境でErlang VM (beam.smp) がホストメモリを参照して過剰なメモリ割り当てを行い、デフォルト250MiBでOOMKilled発生。2560MiBに増加で解決
 - frontend-proxyはNodePortに変更が必要 (port 30080+チーム番号)
+- **gameday/ディレクトリの注意**: `tgen/o11y-gameday`ブランチにのみ存在。EC2のUserDataでリポジトリclone時にブランチ指定が必要
 
 ---
 
@@ -161,8 +180,22 @@ gameday/
 - [x] `GET /api/questions` - 設問一覧取得
 - [x] `POST /api/answers` - 回答送信（正解/不正解判定、得点計算）
 
-**Todo**:
-- [ ] ECS Fargateへのデプロイ
+**デプロイコマンド**:
+```bash
+# 管理アプリデプロイ（Docker build + ECR push + CloudFormation）
+./gameday/admin-app/deploy-admin.sh \
+  --environment dev \
+  --create-dynamodb \
+  --cluster-name gameday-kind \
+  --splunk-realm jp0 \
+  --admin-password gameday2026
+```
+
+**デプロイ結果** (2026-02-09):
+- [x] ECS Express Modeへのデプロイ完了
+- [x] DynamoDBテーブル作成完了
+- [x] ヘルスチェック正常 (HTTP 200)
+- [x] 設問API動作確認済み
 
 ---
 
