@@ -1,12 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import {
   docClient,
   TABLES,
   PutCommand,
   GetCommand,
   QueryCommand,
-  UpdateCommand,
 } from '../services/dynamodb';
 import {
   getQuestion,
@@ -15,6 +13,7 @@ import {
   updateTeamScore,
   getTeamProgress,
 } from '../services/scoring';
+import { getGameState } from './admin';
 
 const router = Router();
 
@@ -24,9 +23,14 @@ interface AnswerSubmission {
   answer_text: string;
 }
 
-// Submit an answer
+// 回答を提出
 router.post('/', async (req: Request, res: Response) => {
   try {
+    // ゲーム状態チェック（アクティブでなければ回答を受け付けない）
+    if (getGameState() !== 'active') {
+      return res.status(403).json({ error: 'ゲームが開始されていません' });
+    }
+
     const { team_id, question_id, answer_text }: AnswerSubmission = req.body;
 
     if (!team_id || !question_id || !answer_text) {
@@ -35,13 +39,13 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    // Get the question
+    // 問題を取得
     const question = getQuestion(question_id);
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
     }
 
-    // Get team info to calculate time elapsed
+    // チーム情報を取得して経過時間を計算
     const teamResult = await docClient.send(
       new GetCommand({
         TableName: TABLES.TEAMS,
@@ -58,7 +62,7 @@ router.post('/', async (req: Request, res: Response) => {
     const now = new Date();
     const timeElapsedMinutes = (now.getTime() - startedAt.getTime()) / (1000 * 60);
 
-    // Check if already answered correctly
+    // 既に正解済みかチェック
     const existingAnswer = await docClient.send(
       new GetCommand({
         TableName: TABLES.ANSWERS,
@@ -73,18 +77,18 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    // Get attempt count
+    // 回答回数を取得
     const attemptCount = (existingAnswer.Item?.attempt_count || 0) + 1;
 
-    // Check if answer is correct
+    // 回答が正しいかチェック
     const isCorrect = checkAnswer(answer_text, question.answer_keywords);
 
-    // Calculate points
+    // ポイントを計算
     const pointsAwarded = isCorrect
       ? calculateScore(question.base_points, timeElapsedMinutes, attemptCount)
       : 0;
 
-    // Store the answer
+    // 回答を保存
     const answer = {
       team_id,
       question_id,
@@ -103,12 +107,12 @@ router.post('/', async (req: Request, res: Response) => {
       })
     );
 
-    // Update team score if correct
+    // 正解ならチームスコアを更新
     if (isCorrect) {
       await updateTeamScore(team_id);
     }
 
-    // Get updated progress
+    // 更新された進捗を取得
     const progress = await getTeamProgress(team_id);
 
     res.json({
@@ -118,6 +122,7 @@ router.post('/', async (req: Request, res: Response) => {
       message: isCorrect
         ? `正解です！ ${pointsAwarded}点獲得しました。`
         : `不正解です。再度お試しください。（${attemptCount}回目の回答）`,
+      explanation: isCorrect ? question.explanation : undefined,
     });
   } catch (error) {
     console.error('Error submitting answer:', error);
@@ -125,7 +130,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// Get answers for a team
+// チームの回答一覧を取得
 router.get('/team/:teamId', async (req: Request, res: Response) => {
   try {
     const { teamId } = req.params;
@@ -147,7 +152,7 @@ router.get('/team/:teamId', async (req: Request, res: Response) => {
   }
 });
 
-// Get a specific answer
+// 特定の回答を取得
 router.get('/team/:teamId/question/:questionId', async (req: Request, res: Response) => {
   try {
     const { teamId, questionId } = req.params;

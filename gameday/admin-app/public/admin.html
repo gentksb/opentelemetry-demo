@@ -218,9 +218,66 @@
       cursor: pointer;
       font-weight: bold;
     }
+    /* 認証ダイアログ */
+    .auth-overlay {
+      position: fixed; top:0; left:0; right:0; bottom:0;
+      background: rgba(0,0,0,0.85);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .auth-form {
+      background: #1a1a2e; padding: 40px; border-radius: 15px;
+      text-align: center; min-width: 350px;
+    }
+    .auth-form h2 { color: #00d4ff; margin-bottom: 20px; }
+    .auth-form input {
+      width: 100%; padding: 12px; border: none; border-radius: 5px;
+      background: rgba(255,255,255,0.1); color: #fff; font-size: 1rem;
+      margin-bottom: 15px;
+    }
+    .auth-form button {
+      width: 100%; padding: 12px; background: #00d4ff; color: #000;
+      border: none; border-radius: 5px; font-weight: bold; cursor: pointer;
+      font-size: 1rem;
+    }
+    .auth-form .skip-btn {
+      background: transparent; color: rgba(255,255,255,0.5);
+      margin-top: 10px; font-size: 0.85rem;
+    }
+    /* ゲーム状態バナー */
+    .game-banner {
+      padding: 15px 20px; border-radius: 10px; margin-bottom: 20px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .game-banner.waiting { background: rgba(255,193,7,0.2); border: 1px solid #ffc107; }
+    .game-banner.active { background: rgba(0,255,136,0.2); border: 1px solid #00ff88; }
+    .game-banner.finished { background: rgba(255,107,107,0.2); border: 1px solid #ff6b6b; }
+    .game-banner .state-text { font-size: 1.1rem; font-weight: bold; }
+    .game-banner .elapsed { color: rgba(255,255,255,0.7); font-size: 0.9rem; }
+    .game-controls { display: flex; gap: 10px; }
+    .game-controls button {
+      padding: 8px 20px; border: none; border-radius: 5px;
+      cursor: pointer; font-weight: bold; font-size: 0.9rem;
+    }
+    .btn-start { background: #00ff88; color: #000; }
+    .btn-stop { background: #ff6b6b; color: #fff; }
+    .btn-reset { background: rgba(255,255,255,0.2); color: #fff; }
+    .team-actions .delete-btn {
+      background: #dc3545; color: #fff;
+    }
   </style>
 </head>
 <body>
+  <!-- 認証ダイアログ -->
+  <div id="auth-overlay" class="auth-overlay" style="display:none;">
+    <div class="auth-form">
+      <h2>管理者ログイン</h2>
+      <input type="password" id="admin-password" placeholder="管理者パスワード" onkeypress="if(event.key==='Enter')doLogin()">
+      <button onclick="doLogin()">ログイン</button>
+      <button class="skip-btn" onclick="skipLogin()">パスワード未設定の場合スキップ</button>
+    </div>
+  </div>
+
   <div class="container">
     <header>
       <h1>o11y Game Day - 運営ダッシュボード</h1>
@@ -229,6 +286,19 @@
         <button class="refresh-btn" onclick="loadData()">更新</button>
       </div>
     </header>
+
+    <!-- ゲーム状態バナー -->
+    <div id="game-banner" class="game-banner waiting">
+      <div>
+        <span class="state-text" id="game-state-text">待機中</span>
+        <span class="elapsed" id="game-elapsed"></span>
+      </div>
+      <div class="game-controls">
+        <button class="btn-start" id="btn-start" onclick="startGame()">ゲーム開始</button>
+        <button class="btn-stop" id="btn-stop" onclick="stopGame()" style="display:none;">ゲーム終了</button>
+        <button class="btn-reset" id="btn-reset" onclick="resetGame()" style="display:none;">リセット</button>
+      </div>
+    </div>
 
     <div class="stats-grid" id="stats-grid">
       <div class="stat-card">
@@ -284,16 +354,92 @@
 
   <script>
     let autoRefreshInterval = null;
+    let adminToken = null;
+
+    // 認証ヘッダーを返すヘルパー
+    function authHeaders(extra = {}) {
+      const h = { 'Content-Type': 'application/json', ...extra };
+      if (adminToken) h['Authorization'] = `Bearer ${adminToken}`;
+      return h;
+    }
+
+    // 認証付きfetch
+    async function authFetch(url, opts = {}) {
+      opts.headers = authHeaders(opts.headers || {});
+      return fetch(url, opts);
+    }
+
+    // ログイン処理
+    function doLogin() {
+      adminToken = document.getElementById('admin-password').value;
+      document.cookie = `admin_token=${adminToken};path=/`;
+      document.getElementById('auth-overlay').style.display = 'none';
+      loadData();
+    }
+    function skipLogin() {
+      adminToken = null;
+      document.getElementById('auth-overlay').style.display = 'none';
+      loadData();
+    }
+
+    // ゲーム制御
+    async function loadGameState() {
+      try {
+        const r = await fetch('/api/game/state');
+        const data = await r.json();
+        const banner = document.getElementById('game-banner');
+        const stateText = document.getElementById('game-state-text');
+        const elapsed = document.getElementById('game-elapsed');
+        banner.className = 'game-banner ' + data.state;
+        const labels = { waiting: '待機中', active: 'ゲーム進行中', finished: '終了' };
+        stateText.textContent = labels[data.state] || data.state;
+        elapsed.textContent = data.state === 'active' ? `(経過: ${Math.floor(data.elapsed_minutes)}分)` : '';
+        document.getElementById('btn-start').style.display = data.state === 'waiting' ? '' : 'none';
+        document.getElementById('btn-stop').style.display = data.state === 'active' ? '' : 'none';
+        document.getElementById('btn-reset').style.display = data.state !== 'waiting' ? '' : 'none';
+      } catch(e) { console.error('Game state error:', e); }
+    }
+    async function startGame() {
+      if (!confirm('ゲームを開始しますか？全チームの開始時刻がリセットされます。')) return;
+      await authFetch('/api/admin/game/start', { method: 'POST' });
+      loadGameState(); loadData();
+    }
+    async function stopGame() {
+      if (!confirm('ゲームを終了しますか？')) return;
+      await authFetch('/api/admin/game/stop', { method: 'POST' });
+      loadGameState(); loadData();
+    }
+    async function resetGame() {
+      if (!confirm('ゲーム状態を待機中に戻しますか？')) return;
+      await authFetch('/api/admin/game/reset', { method: 'POST' });
+      loadGameState(); loadData();
+    }
+
+    // チーム削除
+    async function deleteTeam(teamId) {
+      if (!confirm(`${teamId} を削除しますか？関連する回答データもすべて削除されます。`)) return;
+      try {
+        const r = await authFetch(`/api/teams/${teamId}`, { method: 'DELETE' });
+        if (r.ok) loadData();
+        else alert('削除に失敗しました');
+      } catch(e) { console.error('Delete error:', e); alert('エラーが発生しました'); }
+    }
 
     async function loadData() {
       try {
         // Load scoreboard
-        const scoreboardResponse = await fetch('/api/admin/scoreboard');
+        const scoreboardResponse = await authFetch('/api/admin/scoreboard');
+        if (scoreboardResponse.status === 401) {
+          document.getElementById('auth-overlay').style.display = 'flex';
+          return;
+        }
         const scoreboardData = await scoreboardResponse.json();
         renderScoreboard(scoreboardData);
 
+        loadGameState();
+
         // Load stats
-        const statsResponse = await fetch('/api/admin/stats');
+        const statsResponse = await authFetch('/api/admin/stats');
         const statsData = await statsResponse.json();
         renderStats(statsData);
 
@@ -344,6 +490,7 @@
             <div class="team-actions">
               <button class="advance" onclick="advanceTeam('${team.team_id}')">Stage進行</button>
               <button class="reset" onclick="resetTeam('${team.team_id}')">リセット</button>
+              <button class="delete-btn" onclick="deleteTeam('${team.team_id}')">削除</button>
             </div>
           </td>
         </tr>
@@ -380,7 +527,7 @@
       if (!confirm(`${teamId}をStage 2に進めますか？`)) return;
 
       try {
-        await fetch(`/api/admin/teams/${teamId}/advance-stage`, { method: 'POST' });
+        await authFetch(`/api/admin/teams/${teamId}/advance-stage`, { method: 'POST' });
         loadData();
       } catch (error) {
         console.error('Error advancing team:', error);
@@ -391,7 +538,7 @@
       if (!confirm(`${teamId}の進行状況をリセットしますか？`)) return;
 
       try {
-        await fetch(`/api/admin/teams/${teamId}/reset`, { method: 'POST' });
+        await authFetch(`/api/admin/teams/${teamId}/reset`, { method: 'POST' });
         loadData();
       } catch (error) {
         console.error('Error resetting team:', error);
@@ -400,7 +547,7 @@
 
     async function recalculateScores() {
       try {
-        await fetch('/api/admin/recalculate-scores', { method: 'POST' });
+        await authFetch('/api/admin/recalculate-scores', { method: 'POST' });
         loadData();
         alert('スコアを再計算しました');
       } catch (error) {

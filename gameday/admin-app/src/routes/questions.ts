@@ -37,6 +37,7 @@ router.get('/', async (req: Request, res: Response) => {
       question_text: q.question_text,
       base_points: q.base_points,
       stage: q.stage,
+      hint: q.hint,
       answered: progress?.correctQuestions.includes(q.question_id) || false,
     }));
 

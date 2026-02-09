@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  o11y Game Day Admin App - DynamoDB tables and ECS Fargate deployment
+  o11y Game Day Admin App - ECS Express Mode + DynamoDB
 
 Parameters:
   Environment:
@@ -10,23 +10,49 @@ Parameters:
       - dev
       - prod
 
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: VPC ID for ECS tasks
-
-  SubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: Subnet IDs for ECS tasks
-
   ContainerImage:
     Type: String
-    Description: Container image URI for the admin app
+    Description: Container image URI for the admin app (e.g. 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/gameday-admin:latest)
+
+  CreateDynamoDB:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Set to true to create DynamoDB tables (false if they already exist in another stack)
+
+  ClusterName:
+    Type: String
     Default: ""
+    Description: Kind cluster name for deployment.environment naming (e.g. gameday-kind)
+
+  SplunkRealm:
+    Type: String
+    Default: jp0
+    Description: Splunk realm for O11y Cloud links
+
+  AdminPassword:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Admin API password (leave empty to disable auth)
+
+  ImageVersion:
+    Type: String
+    Default: "1"
+    Description: Increment to force ECS task definition update when using latest tag
+
+Conditions:
+  ShouldCreateDynamoDB: !Equals [!Ref CreateDynamoDB, "true"]
 
 Resources:
-  # DynamoDB Tables
+  # ============================================================
+  # DynamoDB Tables (conditional - skip if already exist)
+  # ============================================================
   TeamsTable:
     Type: AWS::DynamoDB::Table
+    Condition: ShouldCreateDynamoDB
     Properties:
       TableName: !Sub gameday-teams-${Environment}
       BillingMode: PAY_PER_REQUEST
@@ -46,6 +72,7 @@ Resources:
 
   AnswersTable:
     Type: AWS::DynamoDB::Table
+    Condition: ShouldCreateDynamoDB
     Properties:
       TableName: !Sub gameday-answers-${Environment}
       BillingMode: PAY_PER_REQUEST
@@ -69,6 +96,7 @@ Resources:
 
   QuestionsTable:
     Type: AWS::DynamoDB::Table
+    Condition: ShouldCreateDynamoDB
     Properties:
       TableName: !Sub gameday-questions-${Environment}
       BillingMode: PAY_PER_REQUEST
@@ -86,24 +114,11 @@ Resources:
         - Key: Project
           Value: o11y-gameday
 
-  # ECS Cluster
-  ECSCluster:
-    Type: AWS::ECS::Cluster
-    Properties:
-      ClusterName: !Sub gameday-admin-${Environment}
-      CapacityProviders:
-        - FARGATE
-        - FARGATE_SPOT
-      DefaultCapacityProviderStrategy:
-        - CapacityProvider: FARGATE
-          Weight: 1
-      Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
+  # ============================================================
+  # IAM Roles
+  # ============================================================
 
-  # Task Execution Role
+  # Task Execution Role (for ECR pull, CloudWatch Logs)
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -123,7 +138,7 @@ Resources:
         - Key: splunkit_environment_type
           Value: non-prd
 
-  # Task Role (for DynamoDB access)
+  # Task Role (for DynamoDB access from the application)
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -149,121 +164,113 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:Scan
                 Resource:
-                  - !GetAtt TeamsTable.Arn
-                  - !GetAtt AnswersTable.Arn
-                  - !GetAtt QuestionsTable.Arn
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-teams-${Environment}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-answers-${Environment}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-questions-${Environment}
       Tags:
         - Key: splunkit_data_classification
           Value: public
         - Key: splunkit_environment_type
           Value: non-prd
 
-  # Security Group for ECS
-  ECSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+  # Infrastructure Role (Express Mode: manages ALB, SG, ACM, auto-scaling)
+  InfrastructureRole:
+    Type: AWS::IAM::Role
     Properties:
-      GroupName: !Sub gameday-admin-ecs-${Environment}
-      GroupDescription: Security group for Game Day Admin ECS tasks
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3000
-          ToPort: 3000
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub gameday-admin-ecs-${Environment}
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
-
-  # Log Group
-  LogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /ecs/gameday-admin-${Environment}
-      RetentionInDays: 7
+      RoleName: !Sub gameday-admin-infra-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowAccessToECSForInfrastructureManagement
+            Effect: Allow
+            Principal:
+              Service: ecs.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices
       Tags:
         - Key: splunkit_data_classification
           Value: public
         - Key: splunkit_environment_type
           Value: non-prd
 
-  # Task Definition (created only if ContainerImage is provided)
-  TaskDefinition:
-    Type: AWS::ECS::TaskDefinition
-    Condition: HasContainerImage
+  # ============================================================
+  # ECS Express Gateway Service
+  # ============================================================
+  AdminAppService:
+    Type: AWS::ECS::ExpressGatewayService
+    DependsOn:
+      - TaskExecutionRole
+      - InfrastructureRole
+      - TaskRole
     Properties:
-      Family: !Sub gameday-admin-${Environment}
-      NetworkMode: awsvpc
-      RequiresCompatibilities:
-        - FARGATE
-      Cpu: '256'
-      Memory: '512'
+      ServiceName: !Sub gameday-admin-${Environment}
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      InfrastructureRoleArn: !GetAtt InfrastructureRole.Arn
       TaskRoleArn: !GetAtt TaskRole.Arn
-      ContainerDefinitions:
-        - Name: admin-app
-          Image: !Ref ContainerImage
-          PortMappings:
-            - ContainerPort: 3000
-              Protocol: tcp
-          Environment:
-            - Name: NODE_ENV
-              Value: production
-            - Name: PORT
-              Value: '3000'
-            - Name: AWS_REGION
-              Value: !Ref AWS::Region
-            - Name: TEAMS_TABLE
-              Value: !Ref TeamsTable
-            - Name: ANSWERS_TABLE
-              Value: !Ref AnswersTable
-            - Name: QUESTIONS_TABLE
-              Value: !Ref QuestionsTable
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref LogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: ecs
+      Cpu: "256"
+      Memory: "512"
+      HealthCheckPath: /health
+      PrimaryContainer:
+        Image: !Ref ContainerImage
+        ContainerPort: 3000
+        Environment:
+          - Name: NODE_ENV
+            Value: production
+          - Name: PORT
+            Value: "3000"
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: TEAMS_TABLE
+            Value: !Sub gameday-teams-${Environment}
+          - Name: ANSWERS_TABLE
+            Value: !Sub gameday-answers-${Environment}
+          - Name: QUESTIONS_TABLE
+            Value: !Sub gameday-questions-${Environment}
+          - Name: CLUSTER_NAME
+            Value: !Ref ClusterName
+          - Name: SPLUNK_REALM
+            Value: !Ref SplunkRealm
+          - Name: ADMIN_PASSWORD
+            Value: !Ref AdminPassword
+          - Name: IMAGE_VERSION
+            Value: !Ref ImageVersion
+      ScalingTarget:
+        MinTaskCount: 1
+        MaxTaskCount: 2
+        AutoScalingMetric: AVERAGE_CPU
+        AutoScalingTargetValue: 70
       Tags:
         - Key: splunkit_data_classification
           Value: public
         - Key: splunkit_environment_type
           Value: non-prd
-
-Conditions:
-  HasContainerImage: !Not [!Equals [!Ref ContainerImage, ""]]
+        - Key: Project
+          Value: o11y-gameday
 
 Outputs:
+  # DynamoDB
   TeamsTableName:
     Description: DynamoDB Teams Table Name
-    Value: !Ref TeamsTable
-    Export:
-      Name: !Sub ${AWS::StackName}-TeamsTable
+    Value: !Sub gameday-teams-${Environment}
 
   AnswersTableName:
     Description: DynamoDB Answers Table Name
-    Value: !Ref AnswersTable
-    Export:
-      Name: !Sub ${AWS::StackName}-AnswersTable
+    Value: !Sub gameday-answers-${Environment}
 
   QuestionsTableName:
     Description: DynamoDB Questions Table Name
-    Value: !Ref QuestionsTable
-    Export:
-      Name: !Sub ${AWS::StackName}-QuestionsTable
+    Value: !Sub gameday-questions-${Environment}
 
-  ECSClusterName:
-    Description: ECS Cluster Name
-    Value: !Ref ECSCluster
-    Export:
-      Name: !Sub ${AWS::StackName}-ECSCluster
+  # ECS Express Mode
+  ServiceArn:
+    Description: ECS Express Service ARN
+    Value: !GetAtt AdminAppService.ServiceArn
+
+  ServiceEndpoint:
+    Description: Admin App URL (auto-generated HTTPS endpoint)
+    Value: !GetAtt AdminAppService.Endpoint
 
   TaskRoleArn:
     Description: ECS Task Role ARN
     Value: !GetAtt TaskRole.Arn
-    Export:
-      Name: !Sub ${AWS::StackName}-TaskRole

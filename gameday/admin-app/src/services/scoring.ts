@@ -8,6 +8,8 @@ export interface Question {
   answer_keywords: string[];
   base_points: number;
   stage: number; // 1 = App failures, 2 = FIS infrastructure
+  hint: string; // O11yツールでの調査ヒント
+  explanation: string; // 正解後の解説
 }
 
 export interface Answer {
@@ -42,6 +44,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['getads', 'adservice', 'getad'],
     base_points: 100,
     stage: 1,
+    hint: 'APM > Service Map で ad サービスのエラーを確認し、Traces タブでエラースパンを調査してください',
+    explanation: 'APM の Service Map で ad サービスを選択し、Traces でエラーのあるスパンを見ると、getAds メソッドで例外が発生していることが確認できます。',
   },
   {
     question_id: 'q02-ad-gc',
@@ -51,6 +55,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['garbagecollectiontrigger', 'entry', 'adservice'],
     base_points: 100,
     stage: 1,
+    hint: 'APM で ad サービスのレイテンシ増加やGCポーズを確認。Runtime Metrics も参考にしてください',
+    explanation: 'ad サービスの Runtime Metrics で GC 頻度の増加が確認できます。トレースの詳細を見ると GarbageCollectionTrigger クラスが手動 GC を実行しています。',
   },
   {
     question_id: 'q03-cart-failure',
@@ -60,6 +66,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['_badcartstore', 'badcartstore'],
     base_points: 100,
     stage: 1,
+    hint: 'APM > cart サービスのエラートレースを確認。スパンの属性やエラーメッセージに注目してください',
+    explanation: 'APM で cart サービスのエラートレースを開くと、内部で _badCartStore という不正なストアに切り替わりエラーが発生していることがスパン属性から確認できます。',
   },
   {
     question_id: 'q04-product-catalog',
@@ -69,6 +77,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['oljcespc7z'],
     base_points: 100,
     stage: 1,
+    hint: 'APM で productcatalogservice のエラートレースを確認。リクエストパラメータに商品IDが含まれています',
+    explanation: 'APM の productcatalogservice のエラートレースで、GetProduct スパンのリクエスト属性に商品ID OLJCESPC7Z が記録されています。この商品へのアクセス時のみエラーが発生します。',
   },
   {
     question_id: 'q05-payment-failure',
@@ -78,6 +88,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['gold'],
     base_points: 100,
     stage: 1,
+    hint: 'APM で paymentservice のエラートレースを確認。スパンの属性からユーザー情報を探してください',
+    explanation: 'paymentservice のエラートレースで、スパン属性に app.user.membership=gold が記録されています。gold メンバーシップのユーザーの決済処理のみが失敗します。',
   },
   {
     question_id: 'q06-payment-unreachable',
@@ -87,6 +99,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['badaddress:50051', 'badaddress'],
     base_points: 100,
     stage: 1,
+    hint: 'APM で checkoutservice から paymentservice への呼び出しエラーを確認。接続先アドレスに注目してください',
+    explanation: 'checkoutservice のトレースで paymentservice への gRPC 呼び出しが失敗しており、接続先が badAddress:50051 に変更されていることがスパン属性から確認できます。',
   },
   {
     question_id: 'q07-recommendation-cache',
@@ -96,6 +110,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['cache', 'cached_ids', 'recommendationcache'],
     base_points: 100,
     stage: 1,
+    hint: 'APM で recommendationservice のレイテンシ変動を確認。トレースのスパン名やログからキャッシュ関連の処理を探してください',
+    explanation: 'recommendationservice のトレースで、キャッシュ（cached_ids）の破損により毎回全商品を再取得する処理が走っていることが確認できます。',
   },
   {
     question_id: 'q08-email-memory',
@@ -105,6 +121,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['send_email', 'deliveries', 'sendemail'],
     base_points: 100,
     stage: 1,
+    hint: 'Infrastructure Monitoring で emailservice のメモリ使用量推移を確認。APM の Runtime Metrics も有用です',
+    explanation: 'emailservice の Runtime Metrics でメモリが単調増加しています。send_email 関数内の deliveries リストにメール送信履歴が蓄積され続け、メモリリークを引き起こしています。',
   },
   {
     question_id: 'q09-image-slow',
@@ -114,6 +132,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['x-envoy-fault-delay-request', 'envoy-fault-delay'],
     base_points: 100,
     stage: 1,
+    hint: 'APM で frontend のレイテンシが高いエンドポイントを特定。トレースのHTTPヘッダー属性を確認してください',
+    explanation: 'frontend の画像リクエストトレースで、x-envoy-fault-delay-request ヘッダーが付与されており、Envoy プロキシが意図的に遅延を挿入していることが確認できます。',
   },
   {
     question_id: 'q10-kafka-queue',
@@ -123,6 +143,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['kafka', 'producer', 'consumer', 'queue'],
     base_points: 100,
     stage: 1,
+    hint: 'APM で accounting/fraud-detection サービスの処理遅延を確認。Kafka コンシューマーのラグに注目してください',
+    explanation: 'accounting や fraud-detection の Kafka コンシューマーがメッセージ処理に遅延を起こしており、キューにメッセージが滞留しています。APM のトレースでコンシューマー側のスパン遅延から確認できます。',
   },
 
   // Stage 2: FIS Infrastructure (placeholder - to be expanded)
@@ -131,9 +153,11 @@ export const QUESTIONS: Question[] = [
     flag_name: 'fis-cpu-stress',
     service: 'infrastructure',
     question_text: 'CPU使用率が急上昇しているホスト名/インスタンスIDは何ですか？',
-    answer_keywords: [], // Dynamic based on deployment
+    answer_keywords: ['stress-ng', 'stress', 'cpu'], // Update with actual hostname before event
     base_points: 150,
     stage: 2,
+    hint: 'Infrastructure Monitoring > Hosts でCPU使用率が異常に高いホストを探してください',
+    explanation: 'Infrastructure Monitoring の Hosts ビューで CPU 使用率が急上昇しているホストが確認できます。stress-ng プロセスが CPU ストレスを発生させています。',
   },
   {
     question_id: 'q12-fis-memory',
@@ -143,6 +167,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['stress-ng', 'stress'],
     base_points: 150,
     stage: 2,
+    hint: 'Infrastructure Monitoring > Hosts でメモリ使用率が異常なホストを特定し、Top Processes を確認してください',
+    explanation: 'Infrastructure Monitoring でメモリ使用率が急上昇しているホストの Top Processes を見ると、stress-ng プロセスが大量のメモリを消費していることが確認できます。',
   },
 ];
 
