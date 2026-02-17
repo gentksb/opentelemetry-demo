@@ -1,48 +1,19 @@
-# CLAUDE.md
-
-このファイルはClaude Code (claude.ai/code) がこのリポジトリで作業する際のガイダンスを提供します。
-
 ## プロジェクト概要
 
 OpenTelemetry Demo（Astronomy Shop）のSplunkフォーク。ポリグロットなマイクロサービスECアプリケーションでOpenTelemetry計装を実演しています。`/splunk`ディレクトリのカスタマイズにより、デフォルトの可観測性バックエンド（Jaeger、Prometheus、Grafana）をSplunk Observability Cloudに置き換えています。
 
 ## 主要コマンド
 
-### デモの実行
-```bash
-make start                    # 全サービス起動（UI: http://localhost:8080）
-make start-minimal            # 可観測性バックエンドなしで起動
-make stop                     # 全サービス停止
-make restart service=frontend # 単一サービスの再起動
-make redeploy service=frontend # サービスの再ビルドと再起動
-```
+### docker開始コマンド
 
-### ビルド
-```bash
-make build                    # 全Dockerイメージをビルド
-make build-multiplatform      # linux/amd64とlinux/arm64向けにビルド
 ```
+make start
+```
+その他のコマンドや`docker-compose`の実行を知りたい場合、[dockerデプロイ用ドキュメント](https://opentelemetry.io/docs/demo/docker-deployment/)を確認してください
 
-### テスト
-```bash
-make run-tests                           # 全テスト実行（フロントエンド + トレースベース）
-make run-tracetesting                    # トレースベーステストのみ実行
-make run-tracetesting SERVICES_TO_TEST="ad payment"  # 特定サービスのテスト
-```
+### kubernetes開始コマンド
 
-### リント・検証
-```bash
-make check                    # 全チェック実行（スペル、markdown、ライセンス、リンク）
-make misspell                 # markdownファイルのスペルチェック
-make yamllint                 # YAMLファイルのリント
-make checklicense             # ライセンスヘッダーの検証
-```
-
-### Protobuf生成
-```bash
-make docker-generate-protobuf  # 全サービスのprotobufファイルを再生成
-./docker-gen-proto.sh go checkout  # 特定の言語/サービス向けに生成
-```
+[K8sデプロイ用ドキュメント](https://opentelemetry.io/docs/demo/kubernetes-deployment/)を参照し、最新版を確認してください。
 
 ## アーキテクチャ
 
@@ -64,26 +35,7 @@ make docker-generate-protobuf  # 全サービスのprotobufファイルを再生
 | accounting | C# | .NET/Kafka |
 | load-generator | Python | Locust |
 
-### 主要コンポーネント
-- **pb/demo.proto**: 全gRPCサービスのprotobuf定義
-- **src/otel-collector/otelcol-config.yml**: OpenTelemetry Collectorパイプライン設定
-- **src/flagd/**: エラー注入シナリオ用のフィーチャーフラグ定義
-- **.env**: 環境変数とサービス設定
-- **.env.override**: ローカルオーバーライド（コミット対象外）
-
-### 通信パターン
-- サービス間はgRPCで通信（`pb/demo.proto`で定義）
-- Kafkaで非同期イベント送信（checkout → accounting、checkout → fraud-detection）
-- フロントエンドプロキシ（Envoy）が外部トラフィックをルーティング
-
-### Splunkフォークのメンテナンス
-上流の変更を同期後、`./splunk/update-demos.sh`を実行して更新:
-- `splunk/docker-compose.yml` - Splunk OTel Collectorを使用する変更版composeファイル
-- `splunk/opentelemetry-demo.yaml` - 変更版Kubernetesマニフェスト
-
-YAML処理に`yq`が必要です。
-
-## 開発のヒント
+## 環境変数, Feature Flags, テストとテレメトリの確認
 
 ### 環境設定
 - `.env.override`テンプレートから設定をコピー

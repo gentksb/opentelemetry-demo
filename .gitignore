@@ -82,6 +82,7 @@ gameday/infra/.aws-sam/
 gameday/infra/deployment-results.txt
 gameday/admin-app/node_modules/
 gameday/admin-app/dist/
+gameday/deployed-env.md
 kubernetes/secrets.yaml
 .playwright-mcp/
 .playwright-mcp/**/*
