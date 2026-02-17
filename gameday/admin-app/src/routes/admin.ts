@@ -6,7 +6,6 @@ import {
   UpdateCommand,
   QueryCommand,
   DeleteCommand,
-  GetCommand,
 } from '../services/dynamodb';
 import { QUESTIONS, getTeamProgress, updateTeamScore } from '../services/scoring';
 
@@ -207,48 +206,6 @@ router.get('/teams/:teamId/detail', async (req: Request, res: Response) => {
   }
 });
 
-// チームを次のステージに手動で進める（最大Stage 2）
-router.post('/teams/:teamId/advance-stage', async (req: Request, res: Response) => {
-  try {
-    const { teamId } = req.params;
-    const MAX_STAGE = 2;
-
-    // 現在のステージを確認
-    const teamResult = await docClient.send(
-      new GetCommand({
-        TableName: TABLES.TEAMS,
-        Key: { team_id: teamId },
-      })
-    );
-
-    if (!teamResult.Item) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-
-    const currentStage = teamResult.Item.current_stage || 1;
-    if (currentStage >= MAX_STAGE) {
-      return res.status(400).json({ error: `既に最終ステージ(Stage ${MAX_STAGE})です` });
-    }
-
-    await docClient.send(
-      new UpdateCommand({
-        TableName: TABLES.TEAMS,
-        Key: { team_id: teamId },
-        UpdateExpression: 'SET current_stage = :stage, last_activity = :now',
-        ExpressionAttributeValues: {
-          ':stage': currentStage + 1,
-          ':now': new Date().toISOString(),
-        },
-      })
-    );
-
-    res.json({ message: `Team advanced to Stage ${currentStage + 1}` });
-  } catch (error) {
-    console.error('Error advancing team:', error);
-    res.status(500).json({ error: 'Failed to advance team' });
-  }
-});
-
 // チーム進捗リセット
 router.post('/teams/:teamId/reset', async (req: Request, res: Response) => {
   try {
@@ -383,7 +340,6 @@ router.get('/stats', async (req: Request, res: Response) => {
               teams.reduce((sum, t) => sum + (t.total_score || 0), 0) / teams.length
             )
           : 0,
-      teams_in_stage2: teams.filter((t) => t.current_stage === 2).length,
       question_stats: questionStats,
       updated_at: new Date().toISOString(),
     });

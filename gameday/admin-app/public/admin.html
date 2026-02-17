@@ -107,10 +107,6 @@
       font-size: 0.8rem;
       background: #ff6b6b;
     }
-    .stage-badge.stage-2 {
-      background: #ffd93d;
-      color: #333;
-    }
     .question-progress {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -179,10 +175,6 @@
       border: none;
       border-radius: 3px;
       cursor: pointer;
-    }
-    .team-actions .advance {
-      background: #ffd93d;
-      color: #333;
     }
     .team-actions .reset {
       background: #ff6b6b;
@@ -313,10 +305,6 @@
         <div class="stat-value" id="stat-avg-score">-</div>
         <div class="stat-label">平均スコア</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-value" id="stat-stage2">-</div>
-        <div class="stat-label">Stage 2 進出</div>
-      </div>
     </div>
 
     <div class="create-team-form">
@@ -337,7 +325,6 @@
             <th>チーム名</th>
             <th>スコア</th>
             <th>正解数</th>
-            <th>ステージ</th>
             <th>最終更新</th>
             <th>操作</th>
           </tr>
@@ -454,8 +441,6 @@
       document.getElementById('stat-teams').textContent = stats.total_teams;
       document.getElementById('stat-correct').textContent = stats.total_correct_answers;
       document.getElementById('stat-avg-score').textContent = stats.average_score;
-      document.getElementById('stat-stage2').textContent = stats.teams_in_stage2;
-
       // Render question progress
       const container = document.getElementById('question-progress');
       container.innerHTML = stats.question_stats.map(q => `
@@ -467,7 +452,7 @@
           <div class="progress-bar-container">
             <div class="progress-bar" style="width: ${q.completion_rate}%"></div>
           </div>
-          <div class="progress-text">${q.flag_name} - ${q.teams_completed}/${stats.total_teams} チーム正解</div>
+          <div class="progress-text">${q.flag_name === 'none' ? '(基本操作)' : q.flag_name} - ${q.teams_completed}/${stats.total_teams} チーム正解</div>
         </div>
       `).join('');
     }
@@ -480,15 +465,9 @@
           <td>${team.team_name}<br><small style="color:#888">${team.team_id}</small></td>
           <td style="font-weight:bold;color:#00ff88">${team.total_score}</td>
           <td>${team.questions_correct}</td>
-          <td>
-            <span class="stage-badge ${team.current_stage === 2 ? 'stage-2' : ''}">
-              Stage ${team.current_stage}
-            </span>
-          </td>
           <td><small>${team.last_activity ? new Date(team.last_activity).toLocaleString('ja-JP') : '-'}</small></td>
           <td>
             <div class="team-actions">
-              <button class="advance" onclick="advanceTeam('${team.team_id}')">Stage進行</button>
               <button class="reset" onclick="resetTeam('${team.team_id}')">リセット</button>
               <button class="delete-btn" onclick="deleteTeam('${team.team_id}')">削除</button>
             </div>
@@ -520,17 +499,6 @@
       } catch (error) {
         console.error('Error creating team:', error);
         alert('エラーが発生しました');
-      }
-    }
-
-    async function advanceTeam(teamId) {
-      if (!confirm(`${teamId}をStage 2に進めますか？`)) return;
-
-      try {
-        await authFetch(`/api/admin/teams/${teamId}/advance-stage`, { method: 'POST' });
-        loadData();
-      } catch (error) {
-        console.error('Error advancing team:', error);
       }
     }
 

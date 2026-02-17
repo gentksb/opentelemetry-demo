@@ -7,7 +7,7 @@ export interface Question {
   question_text: string;
   answer_keywords: string[];
   base_points: number;
-  stage: number; // 1 = App failures, 2 = FIS infrastructure
+  stage: number; // 1 = App failures
   hint: string; // O11yツールでの調査ヒント
   explanation: string; // 正解後の解説
 }
@@ -33,13 +33,14 @@ export interface TeamScore {
   last_activity: string;
 }
 
-// Question definitions based on Feature Flags
-// フラグは2グループに分けて有効化する:
-//   グループA（独立系）: productCatalogFailure, adFailure, recommendationCacheFailure
-//   グループB（checkout連鎖系）: paymentFailure(50%), cartFailure
-// 注意: グループBを有効にする場合はproductCatalogFailureをOFFにすること
+// 全10問を同時出題。フラグ切替なしの単一フェーズ運用。
+// 必要なFeature Flags（全て同時にON）:
+//   productCatalogFailure, recommendationCacheFailure, cartFailure,
+//   paymentUnreachable, kafkaQueueProblems, adHighCpu, adManualGc, imageSlowLoad
+//
+// flag_name = 'none' の設問はFeature Flagに依存しない基本操作問題。
 export const QUESTIONS: Question[] = [
-  // Stage 1: グループA - 独立系障害
+  // エラー分析: product-catalog
   {
     question_id: 'q01-product-catalog',
     flag_name: 'productCatalogFailure',
@@ -51,16 +52,19 @@ export const QUESTIONS: Question[] = [
     hint: 'APM > Explore で product-catalog サービスを選択し、エラートレースを開いてください。スパンのタグ（属性）一覧から app.product.id を探してください',
     explanation: 'APM で product-catalog サービスのエラートレースを開き、GetProduct スパンのタグを確認すると app.product.id = OLJCESPC7Z が記録されています。この商品IDへのリクエスト時のみエラーが発生します。',
   },
+  // 基本操作: Service Map
   {
-    question_id: 'q02-ad-failure',
-    flag_name: 'adFailure',
-    service: 'ad',
-    question_text: 'adサービスでgRPCエラーが発生しています。エラーのステータスコードは何ですか？',
-    answer_keywords: ['unavailable'],
+    question_id: 'q02-service-map',
+    flag_name: 'none',
+    service: 'checkout',
+    question_text:
+      'APMのService Mapを確認してください。checkoutサービスから非同期メッセージ（Kafka）を受信しているコンシューマーサービスは2つあります。そのうちの1つのサービス名を答えてください。',
+    answer_keywords: ['accounting', 'fraud-detection', 'frauddetection', 'fraud'],
     base_points: 100,
     stage: 1,
-    hint: 'APM > Explore で ad サービスを選択し、エラートレースを開いてください。スパンのステータスやエラーメッセージを確認してください',
-    explanation: 'APM で ad サービスのエラートレースを開くと、GetAds オペレーションでステータスコード UNAVAILABLE が返されていることが確認できます。約10%の確率でランダムに発生します。',
+    hint: 'APM > Service Map で checkout サービスのノードを確認し、Kafkaを経由して接続しているサービスを探してください',
+    explanation:
+      'Service Map で checkout ノードから Kafka を経由した先を確認すると、accounting サービスと fraud-detection サービスの2つのコンシューマーが orders トピックからメッセージを受信していることが確認できます。',
   },
   {
     question_id: 'q03-recommendation-cache',
@@ -74,17 +78,19 @@ export const QUESTIONS: Question[] = [
     explanation: 'recommendation サービスのトレースで、スパンタグ app.recommendation.cache_enabled = true が確認できます。キャッシュ機能が有効ですが、キャッシュリークにより app.products.count が異常に増加しています。',
   },
 
-  // Stage 1: グループB - checkout連鎖系障害
+  // 基本操作: トレース属性
   {
-    question_id: 'q04-payment-failure',
-    flag_name: 'paymentFailure',
-    service: 'payment',
-    question_text: 'paymentサービスで外部決済APIの呼び出しが失敗しています。エラースパンの peer.service 属性に表示されている外部サービス名は何ですか？',
-    answer_keywords: ['buttercuppayments', 'buttercup'],
+    question_id: 'q04-trace-protocol',
+    flag_name: 'none',
+    service: 'currency',
+    question_text:
+      'APM で currency サービスのトレースを開いてください。GetSupportedCurrencies スパンに記録されている rpc.system 属性の値は何ですか？',
+    answer_keywords: ['grpc'],
     base_points: 100,
     stage: 1,
-    hint: 'APM > Explore で payment サービスを選択し、エラートレースを開いてください。外部API呼び出しのクライアントスパンで peer.service タグを探してください',
-    explanation: 'payment サービスのエラートレースで、buttercup.payments.api スパンのタグに peer.service = ButtercupPayments が記録されています。外部決済サービス ButtercupPayments への呼び出しが確率的に失敗しています。',
+    hint: 'APM > Explore で currency サービスを選択し、トレースを開いてください。GetSupportedCurrencies スパンをクリックし、タグ（属性）の中から rpc.system を探してください',
+    explanation:
+      'currency サービスは gRPC で通信しており、GetSupportedCurrencies スパンの rpc.system 属性には「grpc」と記録されています。OpenTelemetryのセマンティック規約に基づき、RPCフレームワークの種類がこの属性に自動的に記録されます。',
   },
   {
     question_id: 'q05-cart-failure',
@@ -98,28 +104,79 @@ export const QUESTIONS: Question[] = [
     explanation: 'cart サービスのエラートレースで EmptyCart スパンの exception.message に "Wasn\'t able to connect to redis" と記載されています。cartFailure フラグにより不正なホストの Redis（Valkey）への接続が試みられ失敗しています。',
   },
 
-  // Stage 2: FIS Infrastructure (placeholder - to be expanded)
+  // エラー分析: checkout → payment 接続障害
   {
-    question_id: 'q11-fis-cpu',
-    flag_name: 'fis-cpu-stress',
-    service: 'infrastructure',
-    question_text: 'CPU使用率が急上昇しているホスト名/インスタンスIDは何ですか？',
-    answer_keywords: ['stress-ng', 'stress', 'cpu'], // Update with actual hostname before event
-    base_points: 150,
-    stage: 2,
-    hint: 'Infrastructure Monitoring > Hosts でCPU使用率が異常に高いホストを探してください',
-    explanation: 'Infrastructure Monitoring の Hosts ビューで CPU 使用率が急上昇しているホストが確認できます。stress-ng プロセスが CPU ストレスを発生させています。',
+    question_id: 'q06-payment-unreachable',
+    flag_name: 'paymentUnreachable',
+    service: 'checkout',
+    question_text:
+      'checkoutサービスのPlaceOrder操作でpaymentサービスへの接続が失敗しています。エラートレースのスパンのエラーメッセージ（exception.message）に含まれている、接続先の不正なホスト名は何ですか？',
+    answer_keywords: ['badaddress', 'badAddress'],
+    base_points: 100,
+    stage: 1,
+    hint: 'APM > Explore で checkout サービスを選択し、PlaceOrder のエラートレースを開いてください。chargeCard 関連のスパンでエラーメッセージを読み、接続先のホスト名を特定してください',
+    explanation:
+      'checkout サービスのエラートレースを開くと、PlaceOrder スパン内でpaymentサービスへのgRPC呼び出しが失敗しています。エラーメッセージに「lookup badAddress: no such host」と記載されており、不正なアドレス badAddress:50051 への接続が試みられていることがわかります。',
   },
+
+  // エラー分析: Kafkaメッセージング
   {
-    question_id: 'q12-fis-memory',
-    flag_name: 'fis-memory-stress',
-    service: 'infrastructure',
-    question_text: 'メモリ使用率が急上昇しているプロセス名は何ですか？',
-    answer_keywords: ['stress-ng', 'stress'],
-    base_points: 150,
-    stage: 2,
-    hint: 'Infrastructure Monitoring > Hosts でメモリ使用率が異常なホストを特定し、Top Processes を確認してください',
-    explanation: 'Infrastructure Monitoring でメモリ使用率が急上昇しているホストの Top Processes を見ると、stress-ng プロセスが大量のメモリを消費していることが確認できます。',
+    question_id: 'q07-kafka-queue',
+    flag_name: 'kafkaQueueProblems',
+    service: 'checkout',
+    question_text:
+      'checkoutサービスで注文処理後にメッセージキューへの送信を確認してください。APMのトレースで、メッセージ送信スパンの peer.service 属性に表示されているメッセージングシステム名は何ですか？',
+    answer_keywords: ['kafka'],
+    base_points: 100,
+    stage: 1,
+    hint: 'APM > Explore で checkout サービスを選択し、PlaceOrder のトレースを開いてください。「publish」を含むスパンを探し、peer.service タグを確認してください',
+    explanation:
+      'checkout サービスのトレースで、「orders publish」スパンの peer.service 属性に「kafka」と記録されています。注文処理後、checkout サービスは Kafka の orders トピックにメッセージを送信しており、kafkaQueueProblems フラグにより大量の追加メッセージが送信されレイテンシが増加しています。',
+  },
+
+  // Runtime Metrics: CPU負荷
+  {
+    question_id: 'q08-ad-high-cpu',
+    flag_name: 'adHighCpu',
+    service: 'ad',
+    question_text:
+      'adサービスの getAds 操作のレイテンシが異常に高くなっています（数秒レベル）。しかし、adサービスのエラー率は0%です。エラーなしでレイテンシだけが増加する原因を調べるため、APMの Runtime Metrics を確認してください。最も異常値を示しているリソースの種類は何ですか？（CPU / Memory / GC のいずれか）',
+    answer_keywords: ['cpu', 'CPU'],
+    base_points: 100,
+    stage: 1,
+    hint: 'APM > Explore で ad サービスを選択し、右側の「Runtime Metrics」タブをクリックしてください。CPU、Memory、GC の各メトリクスグラフを確認し、異常な値を示しているものを特定してください',
+    explanation:
+      'ad サービスの Runtime Metrics を確認すると、CPU使用率（process.runtime.jvm.cpu.utilization）が異常に高い値を示しています。adHighCpu フラグにより4つのCPU負荷スレッドが起動し、タイトループでCPUを消費しています。エラーは発生しませんが、CPU競合によりレスポンスタイムが大幅に増加しています。',
+  },
+
+  // フロントエンド: 画像遅延（要ブラウザ）
+  {
+    question_id: 'q10-image-slow-load',
+    flag_name: 'imageSlowLoad',
+    service: 'frontend',
+    question_text:
+      'ショップのWebサイトで商品画像の表示が極端に遅くなっています。ブラウザの開発者ツール（DevTools）のNetworkタブで商品画像のリクエストを確認してください。画像リクエストのRequest Headersに追加されている、Envoyプロキシの遅延制御用HTTPヘッダー名は何ですか？（※この設問はブラウザでショップにアクセスして確認してください）',
+    answer_keywords: ['x-envoy-fault-delay-request', 'envoy-fault-delay', 'fault-delay-request'],
+    base_points: 100,
+    stage: 1,
+    hint: 'ブラウザでショップ（フロントエンド）にアクセスし、F12キーで開発者ツールを開いてください。Networkタブで画像ファイル（.jpg）のリクエストを選択し、Request Headers を確認してください。x- で始まるカスタムヘッダーを探してください',
+    explanation:
+      'ブラウザの開発者ツール（DevTools）のNetworkタブで商品画像リクエストを確認すると、Request Headers に x-envoy-fault-delay-request: 5000 が追加されています。フロントエンドの JavaScript が Feature Flag の値を読み取り、画像リクエスト時にこのヘッダーを付与しています。Envoy プロキシ（frontend-proxy）がこのヘッダーを認識し、指定ミリ秒の遅延を挿入しています。',
+  },
+
+  // Runtime Metrics: GC
+  {
+    question_id: 'q09-ad-manual-gc',
+    flag_name: 'adManualGc',
+    service: 'ad',
+    question_text:
+      'adサービスの Runtime Metrics を確認してください。JVMの自動メモリ管理に関連するメトリクスが急増しています。このメトリクス（jvm.xx.duration）の「xx」に入るキーワードは何ですか？',
+    answer_keywords: ['gc', 'GC', 'garbage'],
+    base_points: 100,
+    stage: 1,
+    hint: 'APM > Explore で ad サービスを選択し、Runtime Metrics を確認してください。Memory や GC 関連のグラフを見て、異常なスパイクを示しているメトリクスを特定してください',
+    explanation:
+      'ad サービスの Runtime Metrics を確認すると、GC Duration（jvm.gc.duration）が大幅に増加しています。adManualGc フラグにより手動でガベージコレクションが繰り返しトリガーされ、Stop-The-World 停止が発生しています。ヒープ使用率も90%近くまで上昇してからGCで回収されるパターンが確認できます。',
   },
 ];
 
@@ -197,10 +254,7 @@ export async function getTeamProgress(teamId: string): Promise<{
     const answeredQuestions = answers.map((a) => a.question_id);
     const correctQuestions = answers.filter((a) => a.is_correct).map((a) => a.question_id);
 
-    // Determine current stage
-    const stage1Questions = getQuestionsForStage(1);
-    const stage1Complete = stage1Questions.every((q) => correctQuestions.includes(q.question_id));
-    const currentStage = stage1Complete ? 2 : 1;
+    const currentStage = 1; // Single stage game
 
     return {
       totalScore,

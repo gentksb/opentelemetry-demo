@@ -49,16 +49,6 @@
       font-size: 1.5rem;
       color: #00ff88;
     }
-    .stage-badge {
-      background: #ff6b6b;
-      padding: 5px 15px;
-      border-radius: 20px;
-      font-size: 0.9rem;
-    }
-    .stage-badge.stage-2 {
-      background: #ffd93d;
-      color: #333;
-    }
     .question-list {
       display: grid;
       gap: 15px;
@@ -303,7 +293,6 @@
           <li>時間経過で得点が減少します（1分あたり0.5%、最大50%減少）</li>
           <li>誤答ごとに <strong>5点</strong> のペナルティがあります</li>
           <li>正解時の最低得点は <strong>10点</strong> です</li>
-          <li>Stage 1 の全問正解で Stage 2（インフラ障害）に進めます</li>
         </ul>
       </details>
 
@@ -313,7 +302,6 @@
           <small id="team-id-display">-</small>
         </div>
         <div class="score" id="total-score">0 点</div>
-        <div class="stage-badge" id="stage-badge">Stage 1</div>
       </div>
 
       <div class="progress-summary" id="progress-summary">
@@ -429,12 +417,6 @@
         document.getElementById('team-name').textContent = team.team_name;
         document.getElementById('team-id-display').textContent = currentTeamId;
         document.getElementById('total-score').textContent = `${team.total_score || 0} 点`;
-
-        const stageBadge = document.getElementById('stage-badge');
-        stageBadge.textContent = `Stage ${team.current_stage || 1}`;
-        if (team.current_stage === 2) {
-          stageBadge.classList.add('stage-2');
-        }
 
         // Load questions
         const questionsResponse = await fetch(`/api/questions?team_id=${currentTeamId}`);
