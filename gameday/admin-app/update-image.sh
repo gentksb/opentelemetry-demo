@@ -84,7 +84,7 @@ aws cloudformation deploy \
         CreateDynamoDB="$(get_param CreateDynamoDB)" \
         ClusterName="$(get_param ClusterName)" \
         SplunkRealm="$(get_param SplunkRealm)" \
-        AdminPassword="$(get_param AdminPassword)" \
+        "ParameterKey=AdminPassword,UsePreviousValue=true" \
         ImageVersion="$(date +%s)" \
     --capabilities CAPABILITY_NAMED_IAM \
     --tags \

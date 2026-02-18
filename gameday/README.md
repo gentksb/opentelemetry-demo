@@ -75,15 +75,32 @@ cd gameday/admin-app
 
 ### フラグ運用方針
 
-全フラグを同時に有効化する。`productCatalogFailure`は特定商品のみに影響するため、checkoutフローはブロックされない。
+全フラグを同時に有効化する（単一フェーズ、全10問同時出題）。
 
-| Flag | 設定値 | サービス | 設問 | 回答 |
-|------|--------|----------|------|------|
-| productCatalogFailure | ON | product-catalog | エラースパンの`app.product.id`属性の値は？ | `OLJCESPC7Z` |
-| adFailure | ON | ad | gRPCエラーのステータスコードは？ | `UNAVAILABLE` |
-| recommendationCacheFailure | ON | recommendation | `app.recommendation.cache_enabled`属性の値は？ | `true` |
-| paymentFailure | 50% | payment | エラースパンの`peer.service`属性の外部サービス名は？ | `ButtercupPayments` |
-| cartFailure | ON | cart | 例外メッセージで接続失敗しているストレージの種類は？ | `redis` |
+有効化するフラグ一覧：
+- `productCatalogFailure` - 特定商品のみエラー（checkoutフローはブロックしない）
+- `recommendationCacheFailure` - キャッシュリークによる商品数異常増加
+- `cartFailure` - Redis接続失敗
+- `paymentUnreachable` - 不正ホストへのgRPC接続失敗
+- `kafkaQueueProblems` - Kafkaへの大量メッセージ送信によるレイテンシ増加
+- `adHighCpu` - CPUタイトループによるレイテンシ増加
+- `adManualGc` - 手動GCトリガーによるStop-The-World停止
+- `imageSlowLoad` - Envoyフォルトインジェクションによる画像遅延
+
+### 設問一覧（全10問）
+
+| # | Flag | サービス | 設問概要 | 回答 |
+|---|------|----------|----------|------|
+| 1 | `productCatalogFailure` | product-catalog | エラースパンの `app.product.id` 属性の値は？ | `OLJCESPC7Z` |
+| 2 | なし（基本操作） | checkout | Service MapでcheckoutからKafka経由で受信しているコンシューマーサービス名を1つ答えよ | `accounting` または `fraud-detection` |
+| 3 | `recommendationCacheFailure` | recommendation | スパンの `app.recommendation.cache_enabled` 属性の値は？ | `true` |
+| 4 | なし（基本操作） | currency | `GetSupportedCurrencies` スパンの `rpc.system` 属性の値は？ | `grpc` |
+| 5 | `cartFailure` | cart | `EmptyCart` エラーの例外メッセージで接続失敗しているストレージの種類は？ | `redis` |
+| 6 | `paymentUnreachable` | checkout | `PlaceOrder` エラーの `exception.message` に含まれる不正なホスト名は？ | `badAddress` |
+| 7 | `kafkaQueueProblems` | checkout | メッセージ送信スパンの `peer.service` 属性の値は？ | `kafka` |
+| 8 | `adHighCpu` | ad | Runtime Metricsで最も異常値を示しているリソースの種類は？（CPU/Memory/GC） | `CPU` |
+| 9 | `adManualGc` | ad | 急増しているメトリクス `jvm.xx.duration` の「xx」は？ | `gc` |
+| 10 | `imageSlowLoad` | frontend | 商品画像リクエストのRequest Headersに追加されるEnvoy遅延制御ヘッダー名は？ | `x-envoy-fault-delay-request` |
 
 ## クリーンアップ
 
@@ -106,3 +123,5 @@ aws cloudformation delete-stack --stack-name gameday-kind --region ap-northeast-
 | Splunkにデータが届かない | `kubectl get pods -n splunk-monitoring` / `kubectl logs -n splunk-monitoring -l app=splunk-otel-collector` |
 | Feature Flagが動作しない | `kubectl logs -n <NAMESPACE> deployment/flagd` |
 | fraud-detectionがInit状態 | SQL Serverの初期化待ち。`sql-server-fraud-0`がRunningになるまで待機 |
+| `/admin` にログインできない | `deploy-admin.sh --admin-password <PASSWORD>` でパスワードを再設定 |
+| スコアボードAPIが500エラー | `aws dynamodb list-tables` でテーブル存在確認。なければ `--create-dynamodb` 付きで再デプロイ |

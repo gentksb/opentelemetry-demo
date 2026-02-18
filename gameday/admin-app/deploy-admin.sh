@@ -184,6 +184,38 @@ if [[ "$DELETE_MODE" == "true" ]]; then
         log_warn "ECR repository ${ECR_REPO_NAME} does not exist"
     fi
 
+    # DynamoDBテーブルの残存チェック（DeletionPolicy: Retain により削除されない）
+    DYNAMO_TABLES=("gameday-teams-${ENVIRONMENT}" "gameday-answers-${ENVIRONMENT}" "gameday-questions-${ENVIRONMENT}")
+    REMAINING_TABLES=()
+    for TABLE in "${DYNAMO_TABLES[@]}"; do
+        if aws dynamodb describe-table --table-name "$TABLE" --region "$REGION" &>/dev/null 2>&1; then
+            REMAINING_TABLES+=("$TABLE")
+        fi
+    done
+
+    if [[ ${#REMAINING_TABLES[@]} -gt 0 ]]; then
+        echo ""
+        log_warn "DynamoDBテーブルは DeletionPolicy: Retain により残っています:"
+        for TABLE in "${REMAINING_TABLES[@]}"; do
+            log_info "  - ${TABLE}"
+        done
+        echo ""
+        read -p "$(echo -e "${YELLOW}DynamoDBテーブルも削除しますか？ [y/N]: ${NC}")" CONFIRM
+        if [[ "$CONFIRM" =~ ^[yY]$ ]]; then
+            for TABLE in "${REMAINING_TABLES[@]}"; do
+                log_info "Deleting DynamoDB table: ${TABLE}"
+                aws dynamodb delete-table --table-name "$TABLE" --region "$REGION" --output text --query 'TableDescription.TableStatus' 2>/dev/null || true
+            done
+            log_info "DynamoDB tables deleted"
+        else
+            log_info "DynamoDBテーブルはそのまま残ります。手動で削除するには:"
+            for TABLE in "${REMAINING_TABLES[@]}"; do
+                log_info "  aws dynamodb delete-table --table-name ${TABLE} --region ${REGION}"
+            done
+        fi
+    fi
+
+    echo ""
     log_info "Cleanup completed!"
     exit 0
 fi
@@ -279,6 +311,28 @@ fi
 # ============================================================
 log_step "Step 3: Deploying CloudFormation stack..."
 
+# 既存スタックが存在する場合、パラメータを安全に引き継ぐ
+ADMIN_PASSWORD_PARAM="AdminPassword=${ADMIN_PASSWORD}"
+if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGION" &>/dev/null 2>&1; then
+    log_info "既存スタックを検出。パラメータの整合性を確認します..."
+
+    # CreateDynamoDB: 前回trueなら明示的に--create-dynamodbが指定されなくても引き継ぐ
+    PREV_CREATE_DB=$(aws cloudformation describe-stacks \
+        --stack-name "$STACK_NAME" --region "$REGION" \
+        --query "Stacks[0].Parameters[?ParameterKey=='CreateDynamoDB'].ParameterValue" \
+        --output text 2>/dev/null)
+    if [[ "$PREV_CREATE_DB" == "true" && "$CREATE_DYNAMODB" == "false" ]]; then
+        log_info "DynamoDBテーブル管理設定を引き継ぎます (CreateDynamoDB=true)"
+        CREATE_DYNAMODB="true"
+    fi
+
+    # AdminPassword: 未指定の場合は前回値を引き継ぐ（NoEchoパラメータの安全な処理）
+    if [[ -z "$ADMIN_PASSWORD" ]]; then
+        ADMIN_PASSWORD_PARAM="ParameterKey=AdminPassword,UsePreviousValue=true"
+        log_info "AdminPasswordは前回の値を引き継ぎます"
+    fi
+fi
+
 if [[ "$DRY_RUN" != "true" ]]; then
     aws cloudformation deploy \
         --template-file "${SCRIPT_DIR}/template.yaml" \
@@ -290,7 +344,7 @@ if [[ "$DRY_RUN" != "true" ]]; then
             CreateDynamoDB="$CREATE_DYNAMODB" \
             ClusterName="$CLUSTER_NAME" \
             SplunkRealm="$SPLUNK_REALM" \
-            AdminPassword="$ADMIN_PASSWORD" \
+            "$ADMIN_PASSWORD_PARAM" \
             ImageVersion="$(date +%s)" \
         --capabilities CAPABILITY_NAMED_IAM \
         --tags \

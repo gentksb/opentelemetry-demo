@@ -53,6 +53,7 @@ Resources:
   TeamsTable:
     Type: AWS::DynamoDB::Table
     Condition: ShouldCreateDynamoDB
+    DeletionPolicy: Retain
     Properties:
       TableName: !Sub gameday-teams-${Environment}
       BillingMode: PAY_PER_REQUEST
@@ -73,6 +74,7 @@ Resources:
   AnswersTable:
     Type: AWS::DynamoDB::Table
     Condition: ShouldCreateDynamoDB
+    DeletionPolicy: Retain
     Properties:
       TableName: !Sub gameday-answers-${Environment}
       BillingMode: PAY_PER_REQUEST
@@ -97,6 +99,7 @@ Resources:
   QuestionsTable:
     Type: AWS::DynamoDB::Table
     Condition: ShouldCreateDynamoDB
+    DeletionPolicy: Retain
     Properties:
       TableName: !Sub gameday-questions-${Environment}
       BillingMode: PAY_PER_REQUEST
