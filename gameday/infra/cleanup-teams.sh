@@ -1,14 +1,12 @@
 #!/bin/bash
 #
-# cleanup-teams.sh - Delete o11y Game Day team namespaces from EKS
+# cleanup-teams.sh - Delete o11y Game Day resources from Kubernetes
 #
-# Usage: ./cleanup-teams.sh --team-count 5
+# Usage: ./cleanup-teams.sh [--force] [--keep-collector]
 
 set -e
 
 # Default values
-TEAM_COUNT=1
-CLUSTER_NAME="gameday-otel-demo"
 KEEP_COLLECTOR=false
 
 # Colors for output
@@ -22,14 +20,12 @@ print_usage() {
 Usage: $0 [OPTIONS]
 
 Options:
-  --team-count NUM       Number of team namespaces to delete (default: 1)
-  --cluster-name NAME    EKS cluster name (default: gameday-otel-demo)
   --keep-collector       Keep Splunk OTel Collector (default: delete all)
   --force                Skip confirmation prompt
   --help                 Show this help message
 
 Example:
-  $0 --team-count 5 --force
+  $0 --force
 
 EOF
 }
@@ -49,14 +45,6 @@ log_error() {
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --team-count)
-            TEAM_COUNT="$2"
-            shift 2
-            ;;
-        --cluster-name)
-            CLUSTER_NAME="$2"
-            shift 2
-            ;;
         --keep-collector)
             KEEP_COLLECTOR=true
             shift
@@ -90,29 +78,14 @@ if ! kubectl cluster-info &> /dev/null; then
 fi
 
 log_info "=== o11y Game Day Cleanup ==="
-log_info "Cluster: $CLUSTER_NAME"
-log_info "Teams to delete: $TEAM_COUNT"
 echo ""
 
 # List namespaces to be deleted
 NAMESPACES_TO_DELETE=()
-for i in $(seq 1 $TEAM_COUNT); do
-    TEAM_ID=$(printf "team-%02d" $i)
-    NAMESPACE="otel-demo-${TEAM_ID}"
 
-    # Check if namespace exists
-    if kubectl get namespace "$NAMESPACE" &>/dev/null; then
-        NAMESPACES_TO_DELETE+=("$NAMESPACE")
-        echo "  - $NAMESPACE"
-    else
-        log_warn "Namespace not found: $NAMESPACE"
-    fi
-done
-
-# Check for otel-demo namespace (created by manifest)
 if kubectl get namespace "otel-demo" &>/dev/null; then
     NAMESPACES_TO_DELETE+=("otel-demo")
-    echo "  - otel-demo (from manifest)"
+    echo "  - otel-demo"
 fi
 
 if [[ "$KEEP_COLLECTOR" != "true" ]]; then

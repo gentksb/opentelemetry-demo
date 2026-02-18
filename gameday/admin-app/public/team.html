@@ -346,8 +346,8 @@
     }
 
     function updateO11yLinks() {
-      if (clusterName && currentTeamId) {
-        const envName = `${clusterName}-${currentTeamId}`;
+      if (clusterName) {
+        const envName = clusterName;
         document.getElementById('env-name').textContent = envName;
         document.getElementById('env-info').style.display = 'block';
         // リンクにEnvironmentフィルタを付与

@@ -7,7 +7,7 @@ Parameters:
   InstanceType:
     Type: String
     Default: m5.2xlarge
-    Description: EC2 instance type (needs enough resources for multiple teams)
+    Description: EC2 instance type
     AllowedValues:
       - m5.xlarge
       - m5.2xlarge
@@ -34,13 +34,6 @@ Parameters:
     Type: String
     Default: jp0
     Description: Splunk realm
-
-  TeamCount:
-    Type: Number
-    Default: 1
-    MinValue: 1
-    MaxValue: 10
-    Description: Number of teams to deploy
 
 Mappings:
   RegionAMI:
@@ -147,9 +140,9 @@ Resources:
           Description: HTTPS access
         - IpProtocol: tcp
           FromPort: 8080
-          ToPort: 8099
+          ToPort: 8080
           CidrIp: 0.0.0.0/0
-          Description: Frontend proxy ports for teams
+          Description: Frontend proxy port
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -250,18 +243,6 @@ Resources:
             - containerPort: 30080
               hostPort: 8080
               protocol: TCP
-            - containerPort: 30081
-              hostPort: 8081
-              protocol: TCP
-            - containerPort: 30082
-              hostPort: 8082
-              protocol: TCP
-            - containerPort: 30083
-              hostPort: 8083
-              protocol: TCP
-            - containerPort: 30084
-              hostPort: 8084
-              protocol: TCP
           EOF
           chown ec2-user:ec2-user /home/ec2-user/kind-config.yaml
 
@@ -281,7 +262,6 @@ Resources:
           cat <<EOF > /home/ec2-user/splunk-config.env
           SPLUNK_ACCESS_TOKEN=${SplunkAccessToken}
           SPLUNK_REALM=${SplunkRealm}
-          TEAM_COUNT=${TeamCount}
           EOF
           chmod 600 /home/ec2-user/splunk-config.env
           chown ec2-user:ec2-user /home/ec2-user/splunk-config.env
@@ -292,8 +272,8 @@ Resources:
             sudo -u ec2-user git clone https://github.com/splunk/opentelemetry-demo.git /home/ec2-user/opentelemetry-demo || true
 
           echo "=== Game Day setup complete ==="
-          echo "To deploy teams via SSM or SSH:"
-          echo "  cd /home/ec2-user/opentelemetry-demo && ./gameday/infra/deploy-teams.sh --team-count ${TeamCount} --splunk-token <TOKEN> --splunk-realm ${SplunkRealm}"
+          echo "To deploy via SSM or SSH:"
+          echo "  cd /home/ec2-user/opentelemetry-demo && ./gameday/infra/deploy-teams.sh --splunk-token <TOKEN> --splunk-realm ${SplunkRealm} --cluster-name gameday-kind --enable-flags"
       Tags:
         - Key: Name
           Value: gameday-kind-instance

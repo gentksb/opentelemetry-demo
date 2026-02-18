@@ -24,28 +24,28 @@ aws cloudformation describe-stacks --stack-name gameday-kind \
   --query "Stacks[0].Outputs[?OutputKey=='PublicIP'].OutputValue" --output text
 ```
 
-### チームnamespace のデプロイ
+### アプリケーションのデプロイ
 
-EC2インスタンスにSSM経由でコマンドを実行し、チームnamespaceをデプロイする。
+EC2インスタンスにSSM経由でコマンドを実行し、OpenTelemetry Demoをデプロイする。
 
 ```bash
-# チームnamespaceのデプロイ（SSM経由）
+# アプリケーションのデプロイ（SSM経由）
 INSTANCE_ID=<INSTANCE_ID>
 aws ssm send-command \
   --instance-ids "$INSTANCE_ID" \
   --document-name "AWS-RunShellScript" \
-  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh --team-count 5 --splunk-token <TOKEN> --splunk-realm jp0 --cluster-name gameday-kind"]}' \
+  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh --splunk-token <TOKEN> --splunk-realm jp0 --cluster-name gameday-kind --enable-flags"]}' \
   --region ap-northeast-1
 ```
 
 ### インフラの削除
 
 ```bash
-# チームnamespace削除（SSM経由）
+# アプリケーション削除（SSM経由）
 aws ssm send-command \
   --instance-ids "$INSTANCE_ID" \
   --document-name "AWS-RunShellScript" \
-  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/cleanup-teams.sh"]}' \
+  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/cleanup-teams.sh --force"]}' \
   --region ap-northeast-1
 
 # EC2 + kindクラスタの削除

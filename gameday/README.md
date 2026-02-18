@@ -27,7 +27,7 @@ aws cloudformation deploy \
     splunkit_environment_type=non-prd
 ```
 
-### 2. チームnamespaceのデプロイ（SSM経由）
+### 2. アプリケーションのデプロイ（SSM経由）
 
 ```bash
 INSTANCE_ID=$(aws cloudformation describe-stacks \
@@ -37,7 +37,7 @@ INSTANCE_ID=$(aws cloudformation describe-stacks \
 aws ssm send-command \
   --instance-ids $INSTANCE_ID \
   --document-name "AWS-RunShellScript" \
-  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh --team-count 1 --splunk-token <TOKEN> --splunk-realm jp0 --cluster-name gameday-kind"]}' \
+  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh --splunk-token <TOKEN> --splunk-realm jp0 --cluster-name gameday-kind --enable-flags"]}' \
   --region ap-northeast-1 --timeout-seconds 600
 ```
 
@@ -75,7 +75,7 @@ cd gameday/admin-app
 
 ### フラグ運用方針
 
-全フラグを同時に有効化する（単一フェーズ、全10問同時出題）。
+全フラグを同時に有効化する（単一フェーズ、全10問同時出題）。デプロイ時に `--enable-flags` を指定すると自動的に有効化される。
 
 有効化するフラグ一覧：
 - `productCatalogFailure` - 特定商品のみエラー（checkoutフローはブロックしない）
@@ -105,8 +105,8 @@ cd gameday/admin-app
 ## クリーンアップ
 
 ```bash
-# チームnamespace削除
-./gameday/infra/cleanup-teams.sh --team-count <N>
+# アプリケーション削除
+./gameday/infra/cleanup-teams.sh --force
 
 # 管理アプリ削除
 ./gameday/admin-app/deploy-admin.sh --delete --environment dev

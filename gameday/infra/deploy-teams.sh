@@ -1,13 +1,12 @@
 #!/bin/bash
 #
-# deploy-teams.sh - Deploy o11y Game Day team namespaces to Kubernetes
+# deploy-teams.sh - Deploy o11y Game Day application to Kubernetes
 #
-# Usage: ./deploy-teams.sh --team-count 5 --splunk-token xxx --splunk-realm jp0
+# Usage: ./deploy-teams.sh --splunk-token xxx --splunk-realm jp0 [--enable-flags]
 
 set -e
 
 # Default values
-TEAM_COUNT=1
 SPLUNK_REALM="jp0"
 CLUSTER_NAME="gameday-otel-demo"
 REGION="ap-northeast-1"
@@ -31,18 +30,18 @@ Required Options:
   --splunk-token TOKEN   Splunk Observability Cloud access token
 
 Optional:
-  --team-count NUM       Number of teams to deploy (default: 1)
   --splunk-realm REALM   Splunk realm (default: jp0)
   --rum-token TOKEN      Splunk RUM token (optional)
   --cluster-name NAME    Kubernetes cluster name (default: gameday-otel-demo)
   --region REGION        AWS region (default: ap-northeast-1)
   --manifest-version VER Manifest version (default: 1.5.5)
+  --enable-flags         Enable all Game Day feature flags after deployment
   --skip-collector       Skip Splunk OTel Collector installation
   --dry-run              Show what would be deployed without deploying
   --help                 Show this help message
 
 Example:
-  $0 --team-count 5 --splunk-token abc123
+  $0 --splunk-token abc123 --cluster-name gameday-kind --enable-flags
 
 EOF
 }
@@ -63,13 +62,72 @@ log_step() {
     echo -e "${CYAN}[STEP]${NC} $1"
 }
 
+# Enable Game Day feature flags by patching flagd ConfigMap
+enable_gameday_flags() {
+    local NAMESPACE="$1"
+    log_step "Enabling Game Day feature flags..."
+
+    # Get current flagd config
+    local FLAGD_JSON
+    FLAGD_JSON=$(kubectl get cm flagd-config -n "$NAMESPACE" -o jsonpath='{.data.demo\.flagd\.json}' 2>/dev/null)
+    if [[ -z "$FLAGD_JSON" ]]; then
+        log_error "flagd-config ConfigMap not found in namespace $NAMESPACE"
+        return 1
+    fi
+
+    # Patch flags using python3
+    local PATCHED_JSON
+    PATCHED_JSON=$(echo "$FLAGD_JSON" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+flags = data.get("flags", {})
+# Map of flag name -> target defaultVariant
+targets = {
+    "productCatalogFailure": "on",
+    "recommendationCacheFailure": "on",
+    "cartFailure": "on",
+    "paymentUnreachable": "on",
+    "kafkaQueueProblems": "on",
+    "adHighCpu": "on",
+    "adManualGc": "on",
+    "imageSlowLoad": "5sec",
+}
+changed = []
+for flag_name, target_variant in targets.items():
+    if flag_name in flags:
+        old = flags[flag_name].get("defaultVariant", "")
+        if old != target_variant:
+            flags[flag_name]["defaultVariant"] = target_variant
+            changed.append(f"{flag_name}: {old} -> {target_variant}")
+    else:
+        print(f"WARNING: Flag {flag_name} not found", file=sys.stderr)
+for c in changed:
+    print(f"  {c}", file=sys.stderr)
+json.dump(data, sys.stdout, indent=2)
+')
+
+    if [[ -z "$PATCHED_JSON" ]]; then
+        log_error "Failed to patch flagd configuration"
+        return 1
+    fi
+
+    # Apply patched ConfigMap
+    kubectl create configmap flagd-config \
+        --namespace "$NAMESPACE" \
+        --from-literal="demo.flagd.json=$PATCHED_JSON" \
+        --dry-run=client -o yaml | kubectl apply -f -
+
+    # Restart flagd to pick up changes
+    kubectl rollout restart deployment/flagd -n "$NAMESPACE"
+    log_info "Waiting for flagd to restart..."
+    kubectl rollout status deployment/flagd -n "$NAMESPACE" --timeout=120s 2>/dev/null || true
+
+    log_info "Feature flags enabled successfully"
+}
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --team-count)
-            TEAM_COUNT="$2"
-            shift 2
-            ;;
         --splunk-token)
             SPLUNK_TOKEN="$2"
             shift 2
@@ -93,6 +151,10 @@ while [[ $# -gt 0 ]]; do
         --manifest-version)
             MANIFEST_VERSION="$2"
             shift 2
+            ;;
+        --enable-flags)
+            ENABLE_FLAGS=true
+            shift
             ;;
         --skip-collector)
             SKIP_COLLECTOR=true
@@ -150,12 +212,15 @@ if [[ ! -f "$MANIFEST_FILE" ]]; then
     exit 1
 fi
 
+NAMESPACE="otel-demo"
+
 log_info "=== o11y Game Day Deployment ==="
 log_info "Cluster: ${CLUSTER_NAME}"
 log_info "Region: ${REGION}"
-log_info "Teams to deploy: ${TEAM_COUNT}"
+log_info "Namespace: ${NAMESPACE}"
 log_info "Splunk realm: ${SPLUNK_REALM}"
 log_info "Manifest: splunk-astronomy-shop-${MANIFEST_VERSION}.yaml"
+log_info "Enable flags: ${ENABLE_FLAGS:-false}"
 echo ""
 
 if [[ "$DRY_RUN" == "true" ]]; then
@@ -206,140 +271,103 @@ if [[ "$SKIP_COLLECTOR" != "true" ]]; then
     fi
 fi
 
-# Store deployment results
-OUTPUT_FILE="${SCRIPT_DIR}/deployment-results.txt"
-echo "# o11y Game Day Deployment Results" > "$OUTPUT_FILE"
-echo "# Generated: $(date)" >> "$OUTPUT_FILE"
-echo "# Cluster: ${CLUSTER_NAME}" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
+# Deploy application to single namespace
+log_step "Deploying application to namespace ${NAMESPACE}..."
 
-# Deploy teams
-log_step "Deploying team namespaces..."
-
-for i in $(seq 1 $TEAM_COUNT); do
-    TEAM_ID=$(printf "team-%02d" $i)
-    NAMESPACE="otel-demo-${TEAM_ID}"
-    TEAM_ENV="${CLUSTER_NAME}-${TEAM_ID}"
-
-    log_info "Deploying ${TEAM_ID} to namespace ${NAMESPACE}..."
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        log_info "[DRY-RUN] Would create namespace ${NAMESPACE} and deploy demo"
-        continue
+if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "[DRY-RUN] Would create namespace ${NAMESPACE} and deploy demo"
+    log_info "[DRY-RUN] Environment: ${CLUSTER_NAME}"
+    if [[ "$ENABLE_FLAGS" == "true" ]]; then
+        log_info "[DRY-RUN] Would enable Game Day feature flags"
     fi
+    log_info "[DRY-RUN] Deployment complete"
+    exit 0
+fi
 
-    # Create namespace with team label
-    kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | \
-        kubectl label --local -f - \
-            team-id="$TEAM_ID" \
-            project=o11y-gameday \
-            splunkit_data_classification=public \
-            splunkit_environment_type=non-prd \
-            --overwrite -o yaml | \
-        kubectl apply -f -
+# Create namespace with labels
+kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | \
+    kubectl label --local -f - \
+        project=o11y-gameday \
+        splunkit_data_classification=public \
+        splunkit_environment_type=non-prd \
+        --overwrite -o yaml | \
+    kubectl apply -f -
 
-    # Create workshop-secret for this team
-    log_info "Creating workshop-secret for ${TEAM_ID}..."
-    kubectl create secret generic workshop-secret \
-        --namespace "$NAMESPACE" \
-        --from-literal=instance="${TEAM_ID}-shop-demo" \
-        --from-literal=app="${TEAM_ID}-store" \
-        --from-literal=env="${TEAM_ENV}" \
-        --from-literal=deployment="deployment.environment=${TEAM_ENV}" \
-        --from-literal=realm="${SPLUNK_REALM}" \
-        --from-literal=access_token="${SPLUNK_TOKEN}" \
-        --from-literal=api_token="${SPLUNK_TOKEN}" \
-        --from-literal=rum_token="${RUM_TOKEN:-}" \
-        --from-literal=hec_token="" \
-        --from-literal=hec_url="" \
-        --from-literal=url="" \
-        --from-literal=appd_token="" \
-        --from-literal=flagd_auth="false" \
-        --from-literal=flagd_user="" \
-        --from-literal=flagd_pw="" \
-        --dry-run=client -o yaml | kubectl apply -f -
+# Create workshop-secret
+log_info "Creating workshop-secret..."
+kubectl create secret generic workshop-secret \
+    --namespace "$NAMESPACE" \
+    --from-literal=instance="shop-demo" \
+    --from-literal=app="store" \
+    --from-literal=env="${CLUSTER_NAME}" \
+    --from-literal=deployment="deployment.environment=${CLUSTER_NAME}" \
+    --from-literal=realm="${SPLUNK_REALM}" \
+    --from-literal=access_token="${SPLUNK_TOKEN}" \
+    --from-literal=api_token="${SPLUNK_TOKEN}" \
+    --from-literal=rum_token="${RUM_TOKEN:-}" \
+    --from-literal=hec_token="" \
+    --from-literal=hec_url="" \
+    --from-literal=url="" \
+    --from-literal=appd_token="" \
+    --from-literal=flagd_auth="false" \
+    --from-literal=flagd_user="" \
+    --from-literal=flagd_pw="" \
+    --dry-run=client -o yaml | kubectl apply -f -
 
-    # Deploy OpenTelemetry Demo to the namespace
-    # Note: Some resources (e.g., shop-dc-shim) have namespace: default hardcoded
-    # and will fail with namespace mismatch errors. These are safely ignored.
-    kubectl apply --namespace "$NAMESPACE" -f "$MANIFEST_FILE" 2>&1 | \
-        grep -v "does not match the namespace" || true
+# Deploy OpenTelemetry Demo to the namespace
+# Note: Some resources (e.g., shop-dc-shim) have namespace: default hardcoded
+# and will fail with namespace mismatch errors. These are safely ignored.
+kubectl apply --namespace "$NAMESPACE" -f "$MANIFEST_FILE" 2>&1 | \
+    grep -v "does not match the namespace" || true
 
-    # Patch deployments to add team.id label and deployment.environment
-    log_info "Patching deployments with team identifier..."
-    for DEPLOYMENT in $(kubectl get deployments -n "$NAMESPACE" -o name 2>/dev/null); do
-        DEPLOY_NAME=$(basename "$DEPLOYMENT")
-
-        # Add team-id label
-        kubectl patch "$DEPLOYMENT" -n "$NAMESPACE" --type=json \
-            -p="[{\"op\": \"add\", \"path\": \"/spec/template/metadata/labels/team-id\", \"value\": \"${TEAM_ID}\"}]" 2>/dev/null || true
-
-        # Add deployment.environment to OTEL_RESOURCE_ATTRIBUTES
-        kubectl set env "$DEPLOYMENT" -n "$NAMESPACE" \
-            OTEL_RESOURCE_ATTRIBUTES="service.namespace=opentelemetry-demo,deployment.environment=${TEAM_ENV}" \
-            2>/dev/null || true
-    done
-
-    # Fix for EC2 environment: Increase flagd-ui memory limit
-    # Erlang VM detects host memory (32GB on m5.2xlarge) and allocates accordingly,
-    # causing OOMKilled with default 250Mi limit
-    log_info "Patching flagd-ui memory limit for EC2 environment..."
-    kubectl patch deploy flagd-ui -n "$NAMESPACE" --type=json \
-        -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": "2560Mi"}]' \
+# Patch deployments to set deployment.environment
+log_info "Patching deployments with environment..."
+for DEPLOYMENT in $(kubectl get deployments -n "$NAMESPACE" -o name 2>/dev/null); do
+    kubectl set env "$DEPLOYMENT" -n "$NAMESPACE" \
+        OTEL_RESOURCE_ATTRIBUTES="service.namespace=opentelemetry-demo,deployment.environment=${CLUSTER_NAME}" \
         2>/dev/null || true
-
-    # Fix for kind: Expose frontend-proxy as NodePort for external access
-    log_info "Patching frontend-proxy to NodePort..."
-    NODE_PORT=$((30080 + i - 1))
-    kubectl patch svc frontend-proxy -n "$NAMESPACE" \
-        -p "{\"spec\": {\"type\": \"NodePort\", \"ports\": [{\"port\": 8080, \"targetPort\": 8080, \"nodePort\": ${NODE_PORT}}]}}" \
-        2>/dev/null || true
-
-    log_info "${TEAM_ID} deployed successfully"
-    echo "${TEAM_ID},${NAMESPACE},${TEAM_ENV}" >> "$OUTPUT_FILE"
 done
 
+# Fix for EC2 environment: Increase flagd-ui memory limit
+# Erlang VM detects host memory (32GB on m5.2xlarge) and allocates accordingly,
+# causing OOMKilled with default 250Mi limit
+log_info "Patching flagd-ui memory limit for EC2 environment..."
+kubectl patch deploy flagd-ui -n "$NAMESPACE" --type=json \
+    -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": "2560Mi"}]' \
+    2>/dev/null || true
+
+# Expose frontend-proxy as NodePort for external access
+log_info "Patching frontend-proxy to NodePort (30080)..."
+kubectl patch svc frontend-proxy -n "$NAMESPACE" \
+    -p '{"spec": {"type": "NodePort", "ports": [{"port": 8080, "targetPort": 8080, "nodePort": 30080}]}}' \
+    2>/dev/null || true
+
+log_info "Application deployed successfully"
+
+# Enable feature flags if requested
+if [[ "$ENABLE_FLAGS" == "true" ]]; then
+    enable_gameday_flags "$NAMESPACE"
+fi
+
+# Show deployment status
 echo ""
-log_step "Checking deployment status..."
+log_step "Deployment status"
 
-for i in $(seq 1 $TEAM_COUNT); do
-    TEAM_ID=$(printf "team-%02d" $i)
-    NAMESPACE="otel-demo-${TEAM_ID}"
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        continue
-    fi
-
-    # Get frontend-proxy service info
-    SVC_TYPE=$(kubectl get svc frontend-proxy -n "$NAMESPACE" -o jsonpath='{.spec.type}' 2>/dev/null || echo "")
-
-    if [[ "$SVC_TYPE" == "LoadBalancer" ]]; then
-        EXTERNAL_IP=$(kubectl get svc frontend-proxy -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
-        log_info "${TEAM_ID}: LoadBalancer - ${EXTERNAL_IP}"
-    elif [[ "$SVC_TYPE" == "NodePort" ]]; then
-        NODE_PORT=$(kubectl get svc frontend-proxy -n "$NAMESPACE" -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "")
-        log_info "${TEAM_ID}: NodePort - ${NODE_PORT}"
-    else
-        log_info "${TEAM_ID}: ClusterIP - use port-forward"
-    fi
-done
+SVC_TYPE=$(kubectl get svc frontend-proxy -n "$NAMESPACE" -o jsonpath='{.spec.type}' 2>/dev/null || echo "")
+if [[ "$SVC_TYPE" == "NodePort" ]]; then
+    NODE_PORT=$(kubectl get svc frontend-proxy -n "$NAMESPACE" -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "")
+    log_info "Frontend: NodePort ${NODE_PORT}"
+fi
 
 echo ""
 log_info "=== Deployment Summary ==="
-log_info "Results saved to: ${OUTPUT_FILE}"
-
-if [[ "$DRY_RUN" != "true" ]]; then
-    echo ""
-    log_info "Team namespaces deployed:"
-    kubectl get namespaces -l project=o11y-gameday --no-headers 2>/dev/null | awk '{print "  - " $1}' || echo "  None"
-
-    echo ""
-    log_info "To access a team's frontend:"
-    log_info "  kubectl port-forward -n otel-demo-team-01 svc/frontend-proxy 8080:8080"
-
-    echo ""
-    log_info "To view in Splunk APM, filter by environment:"
-    log_info "  deployment.environment = ${CLUSTER_NAME}-team-01"
-fi
+log_info "Namespace: ${NAMESPACE}"
+log_info "Environment: ${CLUSTER_NAME}"
+log_info ""
+log_info "To access the frontend:"
+log_info "  http://<EC2_IP>:8080"
+log_info ""
+log_info "To view in Splunk APM, filter by environment:"
+log_info "  deployment.environment = ${CLUSTER_NAME}"
 
 log_info "Deployment completed successfully!"
