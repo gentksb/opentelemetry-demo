@@ -34,6 +34,34 @@ make start
 | fraud-detection | Kotlin | Kafkaコンシューマー |
 | accounting | C# | .NET/Kafka |
 | load-generator | Python | Locust |
+| gameday-admin (backend) | TypeScript | Express/AWS SDK |
+| gameday-admin (frontend) | TypeScript | Preact/SWR/Vite |
+
+## Gameday Admin App
+
+`gameday/admin-app/` にあるGameday用の管理・チーム回答アプリケーション。
+
+### 技術スタック
+- **バックエンド**: Express + TypeScript + AWS SDK (DynamoDB)
+- **フロントエンド**: Preact + SWR + Vite（マルチページ: team + admin）
+- **デプロイ**: Docker (マルチステージビルド) → ECR → ECS (CloudFormation)
+
+### 開発コマンド
+```bash
+# バックエンド
+cd gameday/admin-app && npm run dev
+
+# フロントエンド（別ターミナル、APIは localhost:3000 にプロキシ）
+cd gameday/admin-app/frontend && npm run dev
+
+# 型チェック
+cd gameday/admin-app && npx tsc --noEmit          # バックエンド
+cd gameday/admin-app/frontend && npx tsc --noEmit  # フロントエンド
+
+# ビルド・デプロイ
+cd gameday/admin-app && docker build -t gameday-admin .
+cd gameday/admin-app && ./update-image.sh
+```
 
 ## 環境変数, Feature Flags, テストとテレメトリの確認
 

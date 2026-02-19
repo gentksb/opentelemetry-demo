@@ -1,0 +1,246 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  min-height: 100vh;
+  color: #fff;
+}
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+header {
+  text-align: center;
+  padding: 30px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 30px;
+}
+h1 {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  color: #00d4ff;
+}
+.team-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255,255,255,0.05);
+  padding: 15px 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+.team-name {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+.score {
+  font-size: 1.5rem;
+  color: #00ff88;
+}
+.question-list {
+  display: grid;
+  gap: 15px;
+}
+.question-card {
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 20px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.question-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+}
+.question-card.answered {
+  border-left: 4px solid #00ff88;
+  opacity: 0.7;
+}
+.question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.question-service {
+  background: #5c6bc0;
+  padding: 3px 10px;
+  border-radius: 15px;
+  font-size: 0.8rem;
+}
+.question-points {
+  color: #ffd93d;
+  font-weight: bold;
+}
+.question-text {
+  font-size: 1.1rem;
+  margin-bottom: 15px;
+}
+.answer-form {
+  display: flex;
+  gap: 10px;
+}
+.answer-input {
+  flex: 1;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  font-size: 1rem;
+}
+.answer-input::placeholder {
+  color: rgba(255,255,255,0.5);
+}
+.answer-input:focus {
+  outline: 2px solid #00d4ff;
+}
+.submit-btn {
+  padding: 10px 25px;
+  background: #00d4ff;
+  color: #000;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.submit-btn:hover {
+  background: #00a8cc;
+}
+.submit-btn:disabled {
+  background: #666;
+  cursor: not-allowed;
+}
+.result-message {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 5px;
+}
+.result-message.correct {
+  background: rgba(0,255,136,0.2);
+  color: #00ff88;
+}
+.result-message.incorrect {
+  background: rgba(255,107,107,0.2);
+  color: #ff6b6b;
+}
+.login-form {
+  max-width: 400px;
+  margin: 100px auto;
+  background: rgba(255,255,255,0.08);
+  padding: 40px;
+  border-radius: 15px;
+}
+.login-form h2 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.login-form input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  font-size: 1rem;
+}
+.login-form button {
+  width: 100%;
+  padding: 12px;
+  background: #00d4ff;
+  color: #000;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.login-form .error-message {
+  color: #ff6b6b;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.game-status-banner {
+  padding: 15px 20px; border-radius: 10px; margin-bottom: 20px;
+  text-align: center; font-weight: bold;
+}
+.game-status-banner.waiting {
+  background: rgba(255,193,7,0.2); border: 1px solid #ffc107; color: #ffc107;
+}
+.game-status-banner.active {
+  background: rgba(0,255,136,0.15); border: 1px solid #00ff88; color: #00ff88;
+}
+.game-status-banner.finished {
+  background: rgba(255,107,107,0.2); border: 1px solid #ff6b6b; color: #ff6b6b;
+}
+.o11y-links {
+  background: rgba(92,107,192,0.2); border: 1px solid #5c6bc0;
+  padding: 15px 20px; border-radius: 10px; margin-bottom: 20px;
+}
+.o11y-links summary { cursor: pointer; color: #5c6bc0; font-weight: bold; }
+.o11y-links a { color: #00d4ff; text-decoration: none; }
+.o11y-links a:hover { text-decoration: underline; }
+.o11y-links ul { margin: 10px 0 0 20px; line-height: 2; }
+.rules-panel {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+  padding: 15px 20px; border-radius: 10px; margin-bottom: 20px;
+}
+.rules-panel summary { cursor: pointer; font-weight: bold; color: #ffd93d; }
+.rules-panel ul { margin: 10px 0 0 20px; line-height: 1.8; color: rgba(255,255,255,0.8); }
+.rules-panel strong { color: #00ff88; }
+.hint-text {
+  font-size: 0.85rem; color: rgba(255,255,255,0.5); margin-bottom: 10px;
+  font-style: italic;
+}
+.explanation-box {
+  margin-top: 10px; padding: 12px; border-radius: 5px;
+  background: rgba(0,212,255,0.1); border-left: 3px solid #00d4ff;
+  font-size: 0.9rem; color: rgba(255,255,255,0.9);
+}
+.leaderboard {
+  background: rgba(255,255,255,0.05); border-radius: 10px;
+  padding: 15px 20px; margin-bottom: 20px;
+}
+.leaderboard summary { cursor: pointer; font-weight: bold; color: #ffd93d; }
+.leaderboard table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.leaderboard th, .leaderboard td {
+  padding: 8px 12px; text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.leaderboard th { color: #00d4ff; font-size: 0.85rem; }
+.leaderboard .self-row { background: rgba(0,212,255,0.15); }
+.leaderboard .rank-1 { color: #ffd700; }
+.leaderboard .rank-2 { color: #c0c0c0; }
+.leaderboard .rank-3 { color: #cd7f32; }
+.progress-summary {
+  display: flex; gap: 15px; margin-bottom: 15px;
+}
+.progress-summary .prog-item {
+  flex: 1; text-align: center; padding: 10px;
+  background: rgba(255,255,255,0.05); border-radius: 8px;
+}
+.progress-summary .prog-value { font-size: 1.3rem; font-weight: bold; color: #00ff88; }
+.progress-summary .prog-label { font-size: 0.8rem; color: rgba(255,255,255,0.6); }
+#loading {
+  text-align: center;
+  padding: 50px;
+}
+.spinner {
+  border: 3px solid rgba(255,255,255,0.1);
+  border-top: 3px solid #00d4ff;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

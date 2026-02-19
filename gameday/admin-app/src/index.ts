@@ -99,9 +99,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// フロントエンドページの配信
+// フロントエンドページの配信（Viteビルド出力: index.html, admin.html）
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/team.html'));
+  res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 app.get('/admin', (req, res) => {

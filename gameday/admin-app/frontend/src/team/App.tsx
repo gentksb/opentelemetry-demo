@@ -1,0 +1,103 @@
+import { useState, useCallback } from 'preact/hooks';
+import useSWR from 'swr';
+import { apiFetch } from '../api/client';
+import type { Config } from '../api/types';
+import { useGameState } from '../hooks/useGameState';
+import { useTeamData } from '../hooks/useTeamData';
+import { LoginForm } from '../components/team/LoginForm';
+import { GameStatusBanner } from '../components/team/GameStatusBanner';
+import { O11yLinks } from '../components/team/O11yLinks';
+import { RulesPanel } from '../components/team/RulesPanel';
+import { TeamInfo } from '../components/team/TeamInfo';
+import { ProgressSummary } from '../components/team/ProgressSummary';
+import { Leaderboard } from '../components/team/Leaderboard';
+import { QuestionList } from '../components/team/QuestionList';
+
+export function App() {
+  const [currentTeamId, setCurrentTeamId] = useState<string | null>(() => {
+    return localStorage.getItem('teamId');
+  });
+
+  const isLoggedIn = currentTeamId !== null;
+
+  const { data: config } = useSWR<Config>(
+    isLoggedIn ? '/api/config' : null,
+    (url: string) => apiFetch<Config>(url),
+  );
+  const clusterName = config?.cluster_name || '';
+  const splunkRealm = config?.splunk_realm || 'jp0';
+
+  const { data: gameState } = useGameState(isLoggedIn);
+  const {
+    team,
+    questions,
+    leaderboard,
+    explanationCache,
+    incorrectCache,
+    loading,
+    submitAnswer,
+  } = useTeamData(currentTeamId);
+
+  const handleLogin = useCallback((teamId: string) => {
+    localStorage.setItem('teamId', teamId);
+    setCurrentTeamId(teamId);
+  }, []);
+
+  if (!isLoggedIn) {
+    return (
+      <div class="container">
+        <LoginForm onLogin={handleLogin} />
+      </div>
+    );
+  }
+
+  const questionsList = questions?.questions ?? [];
+  const correctCount = questionsList.filter((q) => q.answered).length;
+  const leaderboardTeams = leaderboard?.teams ?? [];
+  const myRank = leaderboardTeams.find((t) => t.team_id === currentTeamId);
+  const rankDisplay = myRank ? `${myRank.rank}/${leaderboardTeams.length}` : '-';
+
+  return (
+    <div class="container">
+      <header>
+        <h1>o11y Game Day</h1>
+        <p>Splunk Observability Cloud トラブルシューティングチャレンジ</p>
+      </header>
+
+      <GameStatusBanner gameState={gameState} />
+
+      <O11yLinks clusterName={clusterName} splunkRealm={splunkRealm} />
+
+      <RulesPanel />
+
+      <TeamInfo
+        teamName={team?.team_name ?? '-'}
+        teamId={currentTeamId}
+        totalScore={team?.total_score ?? 0}
+      />
+
+      <ProgressSummary
+        correctCount={correctCount}
+        totalCount={questionsList.length}
+        rank={rankDisplay}
+      />
+
+      <Leaderboard teams={leaderboardTeams} currentTeamId={currentTeamId} />
+
+      {loading && questionsList.length === 0 ? (
+        <div id="loading">
+          <div class="spinner" />
+          <p>問題を読み込み中...</p>
+        </div>
+      ) : (
+        <QuestionList
+          questions={questionsList}
+          gameState={gameState?.state ?? 'waiting'}
+          explanationCache={explanationCache}
+          incorrectCache={incorrectCache}
+          onSubmit={submitAnswer}
+        />
+      )}
+    </div>
+  );
+}
