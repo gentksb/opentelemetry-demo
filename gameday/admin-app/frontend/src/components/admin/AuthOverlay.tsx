@@ -24,11 +24,12 @@ export function AuthOverlay({ visible, onLogin, onSkip }: AuthOverlayProps) {
           type="password"
           placeholder="管理者パスワード"
           value={password}
+          autocomplete="one-time-code"
           onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
           onKeyPress={(e) => { if (e.key === 'Enter') handleLogin(); }}
         />
-        <button onClick={handleLogin}>ログイン</button>
-        <button class="skip-btn" onClick={onSkip}>パスワード未設定の場合スキップ</button>
+        <button type="button" onClick={handleLogin}>ログイン</button>
+        <button type="button" class="skip-btn" onClick={onSkip}>パスワード未設定の場合スキップ</button>
       </div>
     </div>
   );

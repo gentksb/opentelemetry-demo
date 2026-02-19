@@ -64,7 +64,7 @@ export function App() {
           <h1>o11y Game Day - 運営ダッシュボード</h1>
           <div>
             <span class="last-update">{lastUpdate}</span>{' '}
-            <button class="refresh-btn" onClick={refetchAll}>更新</button>
+            <button type="button" class="refresh-btn" onClick={refetchAll}>更新</button>
           </div>
         </header>
 
@@ -80,7 +80,7 @@ export function App() {
         <CreateTeamForm onCreateTeam={createTeam} />
 
         <div class="actions">
-          <button class="action-btn secondary" onClick={handleRecalculate}>スコア再計算</button>
+          <button type="button" class="action-btn secondary" onClick={handleRecalculate}>スコア再計算</button>
           {recalcMessage && (
             <span style={{ color: '#00ff88', alignSelf: 'center', fontSize: '0.85rem' }}>
               {recalcMessage}

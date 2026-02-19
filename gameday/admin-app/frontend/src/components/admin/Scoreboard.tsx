@@ -51,8 +51,8 @@ export function Scoreboard({ teams, onResetTeam, onDeleteTeam }: ScoreboardProps
               </td>
               <td>
                 <div class="team-actions">
-                  <button class="reset" onClick={() => handleReset(team.team_id)}>リセット</button>
-                  <button class="delete-btn" onClick={() => handleDelete(team.team_id)}>削除</button>
+                  <button type="button" class="reset" onClick={() => handleReset(team.team_id)}>リセット</button>
+                  <button type="button" class="delete-btn" onClick={() => handleDelete(team.team_id)}>削除</button>
                 </div>
               </td>
             </tr>

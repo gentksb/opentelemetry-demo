@@ -90,6 +90,7 @@ export function QuestionCard({
           onKeyPress={handleKeyPress}
         />
         <button
+          type="button"
           class="submit-btn"
           onClick={handleSubmit}
           disabled={submitting}

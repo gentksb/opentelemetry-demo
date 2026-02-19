@@ -44,13 +44,13 @@ export function GameBanner({ gameState, onStart, onStop, onReset }: GameBannerPr
       </div>
       <div class="game-controls">
         {state === 'waiting' && (
-          <button class="btn-start" onClick={handleStart}>ゲーム開始</button>
+          <button type="button" class="btn-start" onClick={handleStart}>ゲーム開始</button>
         )}
         {state === 'active' && (
-          <button class="btn-stop" onClick={handleStop}>ゲーム終了</button>
+          <button type="button" class="btn-stop" onClick={handleStop}>ゲーム終了</button>
         )}
         {state !== 'waiting' && (
-          <button class="btn-reset" onClick={handleReset}>リセット</button>
+          <button type="button" class="btn-reset" onClick={handleReset}>リセット</button>
         )}
       </div>
     </div>

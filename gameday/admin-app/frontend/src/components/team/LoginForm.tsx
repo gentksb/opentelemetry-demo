@@ -49,10 +49,11 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         type="text"
         placeholder="チームID（例: team-01）"
         value={teamId}
+        autocomplete="organization"
         onInput={(e) => setTeamId((e.target as HTMLInputElement).value)}
         onKeyPress={handleKeyPress}
       />
-      <button onClick={handleLogin} disabled={loading}>
+      <button type="button" onClick={handleLogin} disabled={loading}>
         {loading ? 'ログイン中...' : 'ログイン'}
       </button>
     </div>

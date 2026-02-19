@@ -36,7 +36,7 @@ export function CreateTeamForm({ onCreateTeam }: CreateTeamFormProps) {
           }}
           onKeyPress={(e) => { if (e.key === 'Enter') handleCreate(); }}
         />
-        <button onClick={handleCreate}>チーム作成</button>
+        <button type="button" onClick={handleCreate}>チーム作成</button>
       </div>
       {error && <div style={{ color: '#ff6b6b', marginTop: '-20px', marginBottom: '20px', fontSize: '0.85rem' }}>{error}</div>}
     </div>
