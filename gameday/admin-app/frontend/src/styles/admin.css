@@ -250,3 +250,17 @@ tr:hover {
 .team-actions .delete-btn {
   background: #dc3545; color: #fff;
 }
+.copy-teams-btn {
+  padding: 8px 16px;
+  background: rgba(0,212,255,0.2);
+  color: #00d4ff;
+  border: 1px solid #00d4ff;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+.copy-teams-btn:hover {
+  background: rgba(0,212,255,0.4);
+}

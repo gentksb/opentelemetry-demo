@@ -43,6 +43,11 @@ export function App() {
     setCurrentTeamId(teamId);
   }, []);
 
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('teamId');
+    setCurrentTeamId(null);
+  }, []);
+
   if (!isLoggedIn) {
     return (
       <div class="container">
@@ -60,8 +65,13 @@ export function App() {
   return (
     <div class="container">
       <header>
-        <h1>o11y Game Day</h1>
-        <p>Splunk Observability Cloud トラブルシューティングチャレンジ</p>
+        <div class="header-content">
+          <div>
+            <h1>o11y Game Day</h1>
+            <p>Splunk Observability Cloud トラブルシューティングチャレンジ</p>
+          </div>
+          <button type="button" class="logout-btn" onClick={handleLogout}>ログアウト</button>
+        </div>
       </header>
 
       <GameStatusBanner gameState={gameState} />
