@@ -1,4 +1,19 @@
-# Gameday CLAUDE.md
+# Splunk o11y Gameday
+
+## コンセプト
+
+実際に障害のあるアプリケーションの計装から、事前知識ほぼ無しの状態でo11yを用いたトラブルシューティングを行うチャレンジゲームをアカウントチームから顧客へ提供する。
+顧客(以下ゲーム参加者)は、提示された環境で発生している障害を、Splunk Observabitlity Cloud利用して原因特定を行う。
+
+ゲーム参加者は、チームごとに割り当てられた回答ページを用いて、原因と思われる内容を入力し、正解することで得点を得る。一定時間経過後にチーム間で進行状況の比較を行う。
+
+## 技術スタック
+
+- **リポジトリ**: splunk/opentelemetry-demo（Kubernetesデプロイ専用）
+- **インフラ**: kind on AWS EC2
+- **IaC**: AWS Cfn
+- **管理アプリ**: Express.js(Backend) + Vite/Preact(Frontend) + DynamoDB
+- **リージョン**: ap-northeast-1 (東京)
 
 ## インフラデプロイ
 
@@ -85,6 +100,12 @@ cd gameday/admin-app
 ./deploy-admin.sh --delete --environment dev
 ```
 
-## 現在のデプロイ済み環境
+## docs
 
-`gameday/deployed-env.md` を参照。
+### イベント運営者用Doc
+
+@gameday/README.md
+
+### デプロイ済み環境情報（Git追跡無し）
+
+@gameday/deployed-env.md
