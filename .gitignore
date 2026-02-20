@@ -76,6 +76,7 @@ src/react-native-app/saucelabs-package/ios/astronomy-shop-ios.zip
 
 # Claude
 .claude/settings.local.json
+.mcp.json
 
 # Game Day temp files
 gameday/infra/.aws-sam/
