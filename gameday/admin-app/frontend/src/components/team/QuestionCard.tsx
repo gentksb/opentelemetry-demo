@@ -1,6 +1,12 @@
 import { useState } from 'preact/hooks';
 import type { Question, AnswerResult } from '../../api/types';
 
+const TRIGGER_LABELS: Record<string, string> = {
+  customer: '顧客からの問い合わせ',
+  colleague: '同僚からの相談',
+  alert: 'システムアラート',
+};
+
 interface QuestionCardProps {
   question: Question;
   questionIndex: number;
@@ -24,6 +30,8 @@ export function QuestionCard({
 
   const explanation = question.explanation || explanationCache[question.question_id];
   const incorrect = incorrectCache[question.question_id];
+  const triggerLabel = question.trigger_type ? TRIGGER_LABELS[question.trigger_type] : undefined;
+  const isHard = question.difficulty === 'hard';
 
   const handleSubmit = async () => {
     if (gameState !== 'active') {
@@ -62,9 +70,16 @@ export function QuestionCard({
     return (
       <div class="question-card answered">
         <div class="question-header">
-          <span class="question-service">Q{questionIndex} - {question.service}</span>
+          <div class="question-header-left">
+            <span class="question-service">Q{questionIndex} - {question.service}</span>
+            {triggerLabel && (
+              <span class={`trigger-badge trigger-${question.trigger_type}`}>{triggerLabel}</span>
+            )}
+            {isHard && <span class="difficulty-badge difficulty-hard">難問</span>}
+          </div>
           <span class="question-points">{question.base_points}点</span>
         </div>
+        {question.scenario && <div class="scenario-text">{question.scenario}</div>}
         <div class="question-text">{question.question_text}</div>
         <div class="result-message correct">正解済み</div>
         {explanation && <div class="explanation-box">{explanation}</div>}
@@ -75,9 +90,16 @@ export function QuestionCard({
   return (
     <div class="question-card">
       <div class="question-header">
-        <span class="question-service">Q{questionIndex} - {question.service}</span>
+        <div class="question-header-left">
+          <span class="question-service">Q{questionIndex} - {question.service}</span>
+          {triggerLabel && (
+            <span class={`trigger-badge trigger-${question.trigger_type}`}>{triggerLabel}</span>
+          )}
+          {isHard && <span class="difficulty-badge difficulty-hard">難問</span>}
+        </div>
         <span class="question-points">{question.base_points}点</span>
       </div>
+      {question.scenario && <div class="scenario-text">{question.scenario}</div>}
       <div class="question-text">{question.question_text}</div>
       {question.hint && <div class="hint-text">{question.hint}</div>}
       <div class="answer-form">

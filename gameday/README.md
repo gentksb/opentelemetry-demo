@@ -73,34 +73,33 @@ cd gameday/admin-app
 
 ## ゲーム設問
 
+### コンセプト
+
+参加者はSREチームの一員として、「顧客からの問い合わせ」「同僚からの相談」「システムアラート」を起点に障害調査を行うロールプレイ形式。APM Trace だけでなく、Service Map、RUM（Real User Monitoring）、Infrastructure Navigator、Browser DevTools など、複数の可観測性シグナルを横断的に活用する。
+
 ### フラグ運用方針
 
-全フラグを同時に有効化する（単一フェーズ、全10問同時出題）。デプロイ時に `--enable-flags` を指定すると自動的に有効化される。
+全フラグを同時に有効化する（単一フェーズ、全8問同時出題）。デプロイ時に `--enable-flags` を指定すると自動的に有効化される。
 
 有効化するフラグ一覧：
-- `productCatalogFailure` - 特定商品のみエラー（checkoutフローはブロックしない）
-- `recommendationCacheFailure` - キャッシュリークによる商品数異常増加
-- `cartFailure` - Redis接続失敗
-- `paymentUnreachable` - 不正ホストへのgRPC接続失敗
-- `kafkaQueueProblems` - Kafkaへの大量メッセージ送信によるレイテンシ増加
-- `adHighCpu` - CPUタイトループによるレイテンシ増加
-- `adManualGc` - 手動GCトリガーによるStop-The-World停止
-- `imageSlowLoad` - Envoyフォルトインジェクションによる画像遅延
+- `productCatalogFailure` - 特定商品のみエラー（Q1で使用）
+- `cartFailure` - Redis接続失敗（Q3で使用）
+- `imageSlowLoad` - Envoyフォルトインジェクションによる画像遅延（Q4, Q8で使用）
+- `adHighCpu` - CPUタイトループによるリソース異常（Q6で使用）
+- `paymentUnreachable` - 不正ホストへのgRPC接続失敗（Q7で使用）
 
-### 設問一覧（全10問）
+### 設問一覧（全8問）
 
-| # | Flag | サービス | 設問概要 | 回答 |
-|---|------|----------|----------|------|
-| 1 | `productCatalogFailure` | product-catalog | エラースパンの `app.product.id` 属性の値は？ | `OLJCESPC7Z` |
-| 2 | なし（基本操作） | checkout | Service MapでcheckoutからKafka経由で受信しているコンシューマーサービス名を1つ答えよ | `accounting` または `fraud-detection` |
-| 3 | `recommendationCacheFailure` | recommendation | スパンの `app.recommendation.cache_enabled` 属性の値は？ | `true` |
-| 4 | なし（基本操作） | currency | `GetSupportedCurrencies` スパンの `rpc.system` 属性の値は？ | `grpc` |
-| 5 | `cartFailure` | cart | `EmptyCart` エラーの例外メッセージで接続失敗しているストレージの種類は？ | `redis` |
-| 6 | `paymentUnreachable` | checkout | `PlaceOrder` エラーの `exception.message` に含まれる不正なホスト名は？ | `badAddress` |
-| 7 | `kafkaQueueProblems` | checkout | メッセージ送信スパンの `peer.service` 属性の値は？ | `kafka` |
-| 8 | `adHighCpu` | ad | Runtime Metricsで最も異常値を示しているリソースの種類は？（CPU/Memory/GC） | `CPU` |
-| 9 | `adManualGc` | ad | 急増しているメトリクス `jvm.xx.duration` の「xx」は？ | `gc` |
-| 10 | `imageSlowLoad` | frontend | 商品画像リクエストのRequest Headersに追加されるEnvoy遅延制御ヘッダー名は？ | `x-envoy-fault-delay-request` |
+| # | トリガー | シグナル | Flag | サービス | シナリオ概要 | 回答 |
+|---|---------|---------|------|----------|-------------|------|
+| 1 | 顧客 | APM Trace | `productCatalogFailure` | product-catalog | 商品ページエラー報告 → エラーTrace から影響商品IDを特定 | `OLJCESPC7Z` |
+| 2 | 同僚 | Service Map | なし | checkout | 下流アーキテクチャ把握 → Kafka経由の下流サービスを特定 | `accounting` or `fraud-detection` |
+| 3 | 顧客 | APM Trace | `cartFailure` | cart | カートが空にできない → 例外メッセージからデータストア種類を特定 | `redis` |
+| 4 | 顧客 | RUM | `imageSlowLoad` | frontend | 画像表示が遅い → RUMで遅延リクエストのURLパスパターンを特定 | `images` |
+| 5 | 同僚 | RUM Tag Spotlight | なし | frontend | ユーザー層の分析依頼 → enduser.role で最多ロールを特定 | `Guest` |
+| 6 | アラート | Infrastructure | `adHighCpu` | ad | CPU使用率上昇アラート → Infrastructure Navigator で高CPU ワークロードを特定 | `ad` |
+| 7 | アラート | Service Map | `paymentUnreachable` | checkout | エラー率上昇アラート → Service Map で障害サービスを特定 | `payment` |
+| 8 | 顧客 | Browser DevTools | `imageSlowLoad` | frontend | Q4の深堀り → DevToolsで遅延制御HTTPヘッダー名を特定 | `x-envoy-fault-delay-request` |
 
 ## クリーンアップ
 

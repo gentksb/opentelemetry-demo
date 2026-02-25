@@ -28,6 +28,9 @@ export interface Question {
   question_id: string;
   flag_name: string;
   service: string;
+  trigger_type?: 'customer' | 'colleague' | 'alert';
+  difficulty?: 'normal' | 'hard';
+  scenario?: string;
   question_text: string;
   base_points: number;
   stage: number;

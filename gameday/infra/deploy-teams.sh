@@ -31,7 +31,7 @@ Required Options:
 
 Optional:
   --splunk-realm REALM   Splunk realm (default: jp0)
-  --rum-token TOKEN      Splunk RUM token (optional)
+  --rum-token TOKEN      Splunk RUM token (required for Browser RUM and Session Replay)
   --cluster-name NAME    Kubernetes cluster name (default: gameday-otel-demo)
   --region REGION        AWS region (default: ap-northeast-1)
   --manifest-version VER Manifest version (default: 1.5.5)
@@ -84,13 +84,10 @@ flags = data.get("flags", {})
 # Map of flag name -> target defaultVariant
 targets = {
     "productCatalogFailure": "on",
-    "recommendationCacheFailure": "on",
     "cartFailure": "on",
-    "paymentUnreachable": "on",
-    "kafkaQueueProblems": "on",
-    "adHighCpu": "on",
-    "adManualGc": "on",
     "imageSlowLoad": "5sec",
+    "adHighCpu": "on",
+    "paymentServiceFailure": "on",
 }
 changed = []
 for flag_name, target_variant in targets.items():
@@ -180,6 +177,10 @@ done
 if [[ -z "$SPLUNK_TOKEN" ]]; then
     log_error "Splunk access token is required (--splunk-token)"
     exit 1
+fi
+
+if [[ -z "$RUM_TOKEN" ]]; then
+    log_warn "RUM token not set (--rum-token). Browser RUM and Session Replay will not function."
 fi
 
 # Check prerequisites

@@ -49,7 +49,7 @@ INSTANCE_ID=<INSTANCE_ID>
 aws ssm send-command \
   --instance-ids "$INSTANCE_ID" \
   --document-name "AWS-RunShellScript" \
-  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh --splunk-token <TOKEN> --splunk-realm jp0 --cluster-name gameday-kind --enable-flags"]}' \
+  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh --splunk-token <TOKEN> --rum-token <RUM_TOKEN> --splunk-realm jp0 --cluster-name gameday-kind --enable-flags"]}' \
   --region ap-northeast-1
 ```
 
