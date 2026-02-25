@@ -56,13 +56,6 @@ aws ssm send-command \
 ### インフラの削除
 
 ```bash
-# アプリケーション削除（SSM経由）
-aws ssm send-command \
-  --instance-ids "$INSTANCE_ID" \
-  --document-name "AWS-RunShellScript" \
-  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/cleanup-teams.sh --force"]}' \
-  --region ap-northeast-1
-
 # EC2 + kindクラスタの削除
 aws cloudformation delete-stack --stack-name gameday-kind --region ap-northeast-1
 ```

@@ -105,7 +105,7 @@ cd gameday/admin-app
 ## クリーンアップ
 
 ```bash
-# アプリケーション削除
+# アプリケーション削除（ローカルのみ利用を推奨、EC2デプロイ時はインフラ毎削除）
 ./gameday/infra/cleanup-teams.sh --force
 
 # 管理アプリ削除
