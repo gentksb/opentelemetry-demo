@@ -22,7 +22,7 @@ export function QuestionCard({
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState('');
 
-  const explanation = explanationCache[question.question_id];
+  const explanation = question.explanation || explanationCache[question.question_id];
   const incorrect = incorrectCache[question.question_id];
 
   const handleSubmit = async () => {

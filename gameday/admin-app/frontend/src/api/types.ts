@@ -33,6 +33,7 @@ export interface Question {
   stage: number;
   hint?: string;
   answered: boolean;
+  explanation?: string; // 正解済みの場合のみ含まれる
 }
 
 // 問題一覧レスポンス

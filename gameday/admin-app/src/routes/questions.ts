@@ -30,16 +30,21 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     // Remove answer keywords for team view (security)
-    const sanitizedQuestions = questions.map((q) => ({
-      question_id: q.question_id,
-      flag_name: q.flag_name,
-      service: q.service,
-      question_text: q.question_text,
-      base_points: q.base_points,
-      stage: q.stage,
-      hint: q.hint,
-      answered: progress?.correctQuestions.includes(q.question_id) || false,
-    }));
+    // explanation is included only for answered questions
+    const sanitizedQuestions = questions.map((q) => {
+      const answered = progress?.correctQuestions.includes(q.question_id) || false;
+      return {
+        question_id: q.question_id,
+        flag_name: q.flag_name,
+        service: q.service,
+        question_text: q.question_text,
+        base_points: q.base_points,
+        stage: q.stage,
+        hint: q.hint,
+        answered,
+        ...(answered && q.explanation ? { explanation: q.explanation } : {}),
+      };
+    });
 
     res.json({
       questions: sanitizedQuestions,
