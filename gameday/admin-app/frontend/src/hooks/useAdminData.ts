@@ -83,6 +83,14 @@ export function useAdminData({ token, onAuthRequired }: UseAdminDataOptions) {
     refetchAll();
   }, [token, refetchAll]);
 
+  const updateOrgId = useCallback(async (orgId: string) => {
+    await authFetch(token ?? '', '/api/admin/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ org_id: orgId }),
+    });
+  }, [token]);
+
   return {
     scoreboard,
     stats,
@@ -95,5 +103,6 @@ export function useAdminData({ token, onAuthRequired }: UseAdminDataOptions) {
     deleteTeam,
     resetTeam,
     recalculateScores,
+    updateOrgId,
   };
 }

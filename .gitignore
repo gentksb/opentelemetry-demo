@@ -87,6 +87,6 @@ gameday/admin-app/frontend/node_modules/
 gameday/admin-app/frontend/dist/
 gameday/deployed-env.md
 kubernetes/secrets.yaml
-.playwright-mcp/
-.playwright-mcp/**/*
+.playwright-cli/
+.playwright-cli/**/*
 .env

@@ -26,6 +26,7 @@ export function App() {
   );
   const clusterName = config?.cluster_name || '';
   const splunkRealm = config?.splunk_realm || 'jp0';
+  const orgId = config?.splunk_org_id;
 
   const { data: gameState } = useGameState(isLoggedIn);
   const {
@@ -76,7 +77,7 @@ export function App() {
 
       <GameStatusBanner gameState={gameState} />
 
-      <O11yLinks clusterName={clusterName} splunkRealm={splunkRealm} />
+      <O11yLinks clusterName={clusterName} splunkRealm={splunkRealm} orgId={orgId} />
 
       <RulesPanel />
 

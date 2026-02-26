@@ -27,6 +27,7 @@ export function App() {
     deleteTeam,
     resetTeam,
     recalculateScores,
+    updateOrgId,
   } = useAdminData({ token: adminToken, onAuthRequired });
 
   const handleLogin = (token: string) => {
@@ -48,6 +49,19 @@ export function App() {
       setTimeout(() => setRecalcMessage(''), 3000);
     } catch {
       setRecalcMessage('スコア再計算に失敗しました');
+    }
+  };
+
+  const [orgIdInput, setOrgIdInput] = useState('');
+  const [orgIdMessage, setOrgIdMessage] = useState('');
+
+  const handleUpdateOrgId = async () => {
+    try {
+      await updateOrgId(orgIdInput);
+      setOrgIdMessage('Org ID を更新しました');
+      setTimeout(() => setOrgIdMessage(''), 3000);
+    } catch {
+      setOrgIdMessage('更新に失敗しました');
     }
   };
 
@@ -74,6 +88,28 @@ export function App() {
           onStop={stopGame}
           onReset={resetGame}
         />
+
+        <section style="margin-bottom:1.5rem;padding:1rem;background:rgba(255,255,255,0.05);border-radius:8px;">
+          <h2 style="margin:0 0 0.75rem;font-size:1rem;color:rgba(255,255,255,0.7);">Splunk Org ID 設定</h2>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <input
+              type="text"
+              placeholder="例: ABC123xyz"
+              value={orgIdInput}
+              onInput={(e) => setOrgIdInput((e.target as HTMLInputElement).value)}
+              style="flex:1;min-width:200px;padding:0.5rem 0.75rem;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#fff;font-size:0.9rem;"
+            />
+            <button type="button" class="action-btn" onClick={handleUpdateOrgId}>
+              保存
+            </button>
+            {orgIdMessage && (
+              <span style="color:#00ff88;font-size:0.85rem;">{orgIdMessage}</span>
+            )}
+          </div>
+          <small style="color:rgba(255,255,255,0.45);margin-top:0.4rem;display:block;">
+            チーム画面のSplunk O11y Cloudリンクに自動付与されます。イベントごとに設定してください。
+          </small>
+        </section>
 
         <StatsGrid stats={stats.data} />
 

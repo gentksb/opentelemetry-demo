@@ -36,31 +36,15 @@ export interface TeamScore {
   last_activity: string;
 }
 
-// 全8問を同時出題。フラグ切替なしの単一フェーズ運用。
+// 全7問を同時出題。フラグ切替なしの単一フェーズ運用。
 // 必要なFeature Flags（全て同時にON）:
-//   productCatalogFailure, cartFailure, imageSlowLoad, adHighCpu, paymentServiceFailure(default 50%)
+//   cartFailure, imageSlowLoad, adHighCpu, paymentServiceFailure(default 50%)
 //
 // flag_name = 'none' の設問はFeature Flagに依存しない基本操作問題。
 //
 // 全設問は「顧客からの問い合わせ」「同僚からの相談」「システムアラート」のいずれかを
 // 起点とするSREロールプレイ形式。参加者はSREチームの一員として障害対応を行う。
 export const QUESTIONS: Question[] = [
-  // Q1: APM Trace - エラートレースから影響商品IDを特定
-  {
-    question_id: 'q01-product-catalog',
-    flag_name: 'productCatalogFailure',
-    service: 'product-catalog',
-    trigger_type: 'customer',
-    difficulty: 'normal',
-    scenario: '顧客から「特定の商品ページを開くとエラーが表示される」と連絡がありました。product-catalog サービスでエラーが発生しているようです。APMでエラートレースを調査し、影響を受けている商品を特定してください。',
-    question_text: 'エラーが発生しているトレースのスパンから、影響を受けている商品のID（app.product.id の値）を答えてください。',
-    answer_keywords: ['oljcespc7z'],
-    base_points: 100,
-    stage: 1,
-    hint: 'Splunk Observability Cloud にログインし、APM > Explore で product-catalog サービスを選択してください。エラーのあるトレースを開き、スパンのタグ（属性）一覧から app.product.id を探してください。',
-    explanation: 'APM で product-catalog サービスのエラートレースを開き、GetProduct スパンのタグを確認すると app.product.id = OLJCESPC7Z が記録されています。この商品IDへのリクエスト時のみエラーが発生しています。実際のインシデント対応では、この情報をもとに影響範囲の特定や顧客への報告を行います。',
-  },
-
   // Q2: APM Service Map - サービス間の依存関係を把握
   {
     question_id: 'q02-service-map',
@@ -93,52 +77,52 @@ export const QUESTIONS: Question[] = [
     explanation: 'cart サービスのエラートレースで exception.message を確認すると、Valkey（Redis互換）への接続失敗が記録されています。Service Map では cart → redis としてデータストアへの依存関係が表示されます。トレースの例外メッセージで「何が起きたか」を把握し、Service Map で「どのサービスが関係しているか」を視覚的に確認する、という2段階の調査が実際のトラブルシューティングでも有効です。',
   },
 
-  // Q4: RUM Performance - エンドユーザー体験から遅延リソースを特定
+  // Q4: RUM Performance - 遅延の影響範囲を判断
   {
     question_id: 'q04-image-slow-rum',
     flag_name: 'imageSlowLoad',
     service: 'frontend',
     trigger_type: 'customer',
     difficulty: 'normal',
-    scenario: '複数の顧客から「商品画像の表示が異常に遅い」と報告がありました。バックエンドのエラーは出ていないようです。RUM（Real User Monitoring）でエンドユーザーの実体験を確認してください。',
-    question_text: 'RUM の画面で XHR/Fetch リクエストを確認し、5秒以上かかっているリクエストの URL パスに共通するキーワードを答えてください。',
-    answer_keywords: ['images', '/images', 'images/products', '/images/products'],
+    scenario: '複数の顧客から「商品画像の表示が異常に遅い」と報告がありました。バックエンドのエラーは出ていないようです。RUM（Real User Monitoring）でエンドユーザーの実体験を確認し、影響範囲を判断してください。',
+    question_text: 'RUM の Network Requests タブで画像リクエストの遅延状況を確認してください。「全ての顧客が影響を受けている可能性が高い」と言えますか？ YES か NO で答えてください。',
+    answer_keywords: ['yes', 'はい'],
     base_points: 100,
     stage: 1,
-    hint: 'Splunk Observability Cloud > RUM を開いてください。対象のアプリケーションを選択し、Tag Spotlight や User Sessions で遅延しているリクエストの URL パターンを確認してください。画像ファイルに関連するパスを探しましょう。',
-    explanation: 'RUM で確認すると、/images/products/ 配下の画像リクエストが5秒以上かかっています。RUM はバックエンドのトレースでは見えないフロントエンド側のパフォーマンス問題を可視化できます。エラーが出ていなくても、ユーザー体験が悪化していることを検知できるのが RUM の強みです。',
+    hint: 'Splunk Observability Cloud > RUM を開いてください。対象のアプリケーションを選択し、Network Requests タブを開いてください。Response Time でソートすると遅延しているリクエストが見つかります。テーブルに表示されている P50・P75・P99 の各パーセンタイル値を確認し、遅延が特定のユーザーに限られているか、広く発生しているかを判断してください。',
+    explanation: 'RUM の Network Requests タブで画像リクエストを確認すると、P50・P75・P99 の全パーセンタイルで5秒以上の遅延が発生しています。P50（中央値）で遅延が出ているということは少なくとも半数以上のユーザーが影響を受けており、特定のユーザーや端末に限らない問題です。全パーセンタイルで遅延が一様に発生していることから、障害が全ユーザーに影響している可能性が高いと判断できます。パーセンタイル分布を見ることで、バックエンドのエラーログに現れない「体験の劣化」の影響範囲を定量的に把握できるのが RUM の強みです。',
   },
 
-  // Q5: RUM Tag Spotlight - ユーザー分析
+  // Q6: Infrastructure Navigator - K8s コンテナの再起動異常を特定
   {
-    question_id: 'q05-rum-user-role',
+    question_id: 'q06-infra-restarts',
     flag_name: 'none',
-    service: 'frontend',
-    trigger_type: 'colleague',
+    service: 'checkout',
+    trigger_type: 'alert',
     difficulty: 'normal',
-    scenario: '同僚から「サイトのユーザー層を分析してほしい。どんな種類のユーザーが多いか、RUM のデータから確認できる？」と依頼されました。',
-    question_text: 'RUM の Tag Spotlight で enduser.role の分布を確認し、最も割合が高いユーザーロールを答えてください。',
-    answer_keywords: ['guest'],
+    scenario: 'システムアラートで Kubernetes クラスタ上のコンテナが予期せぬ再起動をしていることが検知されました。どのサービスが不安定な状態にあるか、Infrastructure Navigator で調査してください。',
+    question_text: 'gameday-kindクラスタ("sf_environment = gameday-kind")のうち、再起動回数（Restarts）が最も多いコンテナ名を答えてください。',
+    answer_keywords: ['checkout'],
     base_points: 100,
     stage: 1,
-    hint: 'RUM > Tag Spotlight を開いてください。タグの一覧から enduser.role を探し、各ロール（Admin / Member / Guest）の割合を確認してください。',
-    explanation: 'RUM の Tag Spotlight で enduser.role を確認すると、Guest が最も多い割合を占めています。RUM のタグを活用することで、ユーザーセグメント別のパフォーマンスやエラー率を分析できます。例えば特定のロールだけエラーが多い場合、権限やフロー固有の問題を疑えます。',
+    hint: 'Splunk Observability Cloud > Infrastructure > Kubernetes entities を開いてください。フィルタで"sf_environment = gameday-kind"を設定して、Containers ビューに切り替えてください。Restarts の列に注目して、最も多く再起動しているコンテナを探してください。',
+    explanation: 'Kubernetes entities の Containers ビューで Restarts 列を確認すると、checkout コンテナが最も多く再起動しています。checkout は cart や payment など複数の依存サービスの障害の影響を受けやすく、エラーが重なることでコンテナが不安定になっています。Infrastructure Navigator を使うことで、ログや APM トレースを深掘りする前にインフラレベルで「どこが壊れているか」を素早く把握できます。',
   },
 
-  // Q6: Infrastructure Navigator - K8s Pod のリソース異常を特定
+  // Q10: APM Latency - CPU高負荷によるレイテンシ悪化サービスを特定
   {
-    question_id: 'q06-infra-cpu',
+    question_id: 'q10-ad-latency',
     flag_name: 'adHighCpu',
     service: 'ad',
     trigger_type: 'alert',
     difficulty: 'normal',
-    scenario: 'システムアラートで Kubernetes クラスタの CPU 使用率上昇が検知されました。どのワークロードがリソースを大量消費しているか、Infrastructure Navigator で調査してください。',
-    question_text: 'Infrastructure Navigator の Kubernetes ビューで、最も CPU 使用率が高いワークロード（Deployment / Pod）のサービス名を答えてください。',
-    answer_keywords: ['ad'],
+    scenario: 'Critical システムアラートで一部サービスのレイテンシが通常より大幅に高いことが検知されました。APM の Explore でサービス一覧のレイテンシを確認し、最も深刻なサービスを特定してください。',
+    question_text: 'APM の Overview で Health が "Critical" になっているサービスのレイテンシを確認し、突出して高いレイテンシを示しているサービス名を1つ答えてください。',
+    answer_keywords: ['ad', 'checkout', 'payment', 'flaged_ui'],
     base_points: 100,
     stage: 1,
-    hint: 'Splunk Observability Cloud > Infrastructure > Kubernetes Navigator を開いてください。Workloads または Pods のビューに切り替え、CPU 使用率でソートまたはヒートマップの色で異常値を探してください。',
-    explanation: 'Infrastructure Navigator の Kubernetes ビューで確認すると、ad サービスの Pod が突出して高い CPU 使用率を示しています。Infrastructure monitoring によりアプリケーションコードを見なくても、リソース異常をインフラレベルで素早く特定できます。',
+    hint: 'APM > Overview を開いてください。画面下部に全サービスの一覧が表示されます。Latency の列を確認し、他のサービスと比べて際立って高い値を示しているサービスを探してください。',
+    explanation: 'APM の Overview でサービス一覧のレイテンシを確認すると、突出して高いsec単位のレイテンシを示しているサービスがいくつかあります。APM Overview は「どのサービスが遅いか」を一覧で確認するための出発点として非常に有効です。',
   },
 
   // Q7: APM Service Map - エラーの伝播経路を追跡
@@ -150,28 +134,29 @@ export const QUESTIONS: Question[] = [
     difficulty: 'normal',
     scenario: 'システムアラートで checkout サービスのエラー率上昇が検知されました。注文処理の約半数が失敗しているようです。Service Map で checkout サービスの下流を確認し、エラーの発生元を特定してください。',
     question_text: 'Service Map で checkout サービスの下流を確認し、エラーが発生しているサービス名を答えてください。',
-    answer_keywords: ['payment', 'paymentservice', 'payment-service'],
+    answer_keywords: ['ButtercupPayments'],
     base_points: 100,
     stage: 1,
     hint: 'APM > Service Map を開き、checkout サービスのノードをクリックしてください。下流サービスへの接続線の色を確認し、赤く表示されている（エラーが発生している）サービスを探してください。',
     explanation: 'Service Map で checkout の下流を確認すると、payment サービスへの接続が赤く表示されエラーが発生しています。payment サービスのバグバージョン（v350.10）が約50%のリクエストで HTTP 401 エラーを返しており、外部決済ゲートウェイ（ButtercupPayments）が根本原因です。Service Map はエラーの伝播経路を視覚的に把握するのに効果的です。',
   },
 
-  // Q8: Browser DevTools - フロントエンド遅延の原因深堀り
+  // Q9: APM Tag Spotlight - バージョン起因のエラーを特定
   {
-    question_id: 'q08-envoy-header',
-    flag_name: 'imageSlowLoad',
-    service: 'frontend',
-    trigger_type: 'customer',
+    question_id: 'q09-payment-version',
+    flag_name: 'paymentServiceFailure',
+    service: 'payment',
+    trigger_type: 'alert',
     difficulty: 'hard',
-    scenario: 'Q4 で画像リクエストの遅延を確認しました。顧客への根本原因の説明が必要です。ブラウザの開発者ツール（DevTools）でリクエストの詳細を調査し、遅延を引き起こしているメカニズムを特定してください。',
-    question_text: 'ブラウザの DevTools > Network タブで商品画像のリクエストを確認し、Request Headers に追加されている遅延制御用 HTTP ヘッダー名を答えてください。',
-    answer_keywords: ['x-envoy-fault-delay-request', 'envoy-fault-delay', 'fault-delay-request'],
+    scenario: '前の調査でが checkout エラーの発生元が判明しました。SRE チームは対応策を検討していますが、まず「どこに根本原因があるか」を正確に特定する必要があります。APM の Tag Spotlight を使って調査してください。',
+    question_text: 'APM の Tag Spotlight で payment サービスのスパンを version タグで分析し、エラー率が高いバージョン番号を答えてください。',
+    answer_keywords: ['v350.10', '350.10'],
     base_points: 100,
     stage: 1,
-    hint: 'ブラウザでショップ（フロントエンド）にアクセスし、F12 キーで開発者ツールを開いてください。Network タブで画像ファイル（.jpg）のリクエストを選択し、Request Headers を確認してください。x- で始まるカスタムヘッダーを探してください。',
-    explanation: 'DevTools の Network タブで商品画像リクエストを確認すると、Request Headers に x-envoy-fault-delay-request: 5000 が追加されています。フロントエンドの JavaScript が Feature Flag の値を読み取り、画像リクエスト時にこのヘッダーを付与しています。Envoy プロキシがこのヘッダーを認識し、指定ミリ秒の遅延を挿入しています。RUM で「遅い」ことを検知し、DevTools で「なぜ遅いか」を特定する、というのが実際の調査フローです。',
+    hint: 'APM > Overview で payment サービスを選択してください。サービス詳細の Tag Spotlight タブを開き、version タグを探してください。各バージョンのエラー率（Error Ratio）の違いを確認してください。',
+    explanation: 'APM の Tag Spotlight で version タグを確認すると、v350.10 が高いエラー率を示しています。成功するリクエストは v350.9 を使用しますが、v350.10 では ButtercupPayments への認証トークンが無効なため HTTP 401 エラーが返されます。Tag Spotlight はどのディメンション（バージョン、リージョン、ユーザー等）でエラーが集中しているかを迅速に特定できる機能で、実際のインシデント対応ではロールバック対象バージョンの特定に活用できます。',
   },
+
 ];
 
 /**

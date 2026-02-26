@@ -1,11 +1,22 @@
 interface O11yLinksProps {
   clusterName: string;
   splunkRealm: string;
+  orgId?: string;
 }
 
-export function O11yLinks({ clusterName, splunkRealm }: O11yLinksProps) {
+export function O11yLinks({ clusterName, splunkRealm, orgId }: O11yLinksProps) {
   const base = `https://app.${splunkRealm}.signalfx.com`;
   const envName = clusterName;
+  const orgParam = orgId ? `&orgID=${orgId}` : '';
+
+  const apmUrl =
+    `${base}/#/apm?environments=${encodeURIComponent(envName)}${orgParam}`;
+
+  const imUrl =
+    `${base}/#/kubernetes-overview?endTime=now` +
+    `&sf_environment=${encodeURIComponent(envName)}` +
+    `&sources%5B%5D=sf_environment:%5B%22${encodeURIComponent(envName)}%22%5D` +
+    `&startTime=-1d${orgParam}`;
 
   return (
     <details class="o11y-links">
@@ -21,26 +32,13 @@ export function O11yLinks({ clusterName, splunkRealm }: O11yLinksProps) {
       )}
       <ul>
         <li>
-          <a
-            href={`${base}/#/apm?environments=${encodeURIComponent(envName)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <a href={apmUrl} target="_blank" rel="noopener noreferrer">
             APM - サービスマップ &amp; トレース
           </a>
         </li>
         <li>
-          <a href={`${base}/#/infrastructure`} target="_blank" rel="noopener noreferrer">
+          <a href={imUrl} target="_blank" rel="noopener noreferrer">
             Infrastructure Monitoring
-          </a>
-        </li>
-        <li>
-          <a
-            href={`${base}/#/logs?query=deployment.environment%3D${encodeURIComponent(envName)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Log Observer
           </a>
         </li>
       </ul>

@@ -15,6 +15,9 @@ const router = Router();
 let gameState: 'waiting' | 'active' | 'finished' = 'waiting';
 let gameStartedAt: string | null = null;
 
+// Splunk Org ID（イベントごとに管理者が設定。インメモリ）
+let splunkOrgId: string = '';
+
 // ゲーム状態を外部から取得するためのエクスポート関数
 export function getGameState(): 'waiting' | 'active' | 'finished' {
   return gameState;
@@ -22,6 +25,10 @@ export function getGameState(): 'waiting' | 'active' | 'finished' {
 
 export function getGameStartedAt(): string | null {
   return gameStartedAt;
+}
+
+export function getSplunkOrgId(): string {
+  return splunkOrgId;
 }
 
 // ゲーム開始 - 全チームの started_at を現在時刻にリセットし、一斉スタートとする
@@ -277,6 +284,20 @@ router.post('/recalculate-scores', async (req: Request, res: Response) => {
     console.error('Error recalculating scores:', error);
     res.status(500).json({ error: 'Failed to recalculate scores' });
   }
+});
+
+// Splunk Org ID 取得・更新（管理者専用）
+router.get('/config', (req: Request, res: Response) => {
+  res.json({ splunk_org_id: splunkOrgId });
+});
+
+router.put('/config', (req: Request, res: Response) => {
+  const { org_id } = req.body;
+  if (typeof org_id !== 'string') {
+    return res.status(400).json({ error: 'org_id must be a string' });
+  }
+  splunkOrgId = org_id.trim();
+  res.json({ splunk_org_id: splunkOrgId });
 });
 
 // 全問題取得（管理者ビュー、回答キーワード付き）

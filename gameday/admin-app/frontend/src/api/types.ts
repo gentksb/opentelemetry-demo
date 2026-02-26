@@ -9,6 +9,7 @@ export interface GameState {
 export interface Config {
   cluster_name: string;
   splunk_realm: string;
+  splunk_org_id?: string;
 }
 
 // チーム情報

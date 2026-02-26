@@ -11,7 +11,7 @@ import teamsRouter from './routes/teams';
 import answersRouter from './routes/answers';
 import adminRouter from './routes/admin';
 import questionsRouter from './routes/questions';
-import { getGameState, getGameStartedAt } from './routes/admin';
+import { getGameState, getGameStartedAt, getSplunkOrgId } from './routes/admin';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -85,6 +85,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     cluster_name: process.env.CLUSTER_NAME || '',
     splunk_realm: process.env.SPLUNK_REALM || 'jp0',
+    splunk_org_id: getSplunkOrgId(),
   });
 });
 
