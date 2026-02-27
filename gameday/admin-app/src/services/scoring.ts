@@ -137,8 +137,8 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['ButtercupPayments'],
     base_points: 100,
     stage: 1,
-    hint: 'APM > Service Map を開き、checkout サービスのノードをクリックしてください。下流サービスへの接続線の色を確認し、赤く表示されている（エラーが発生している）サービスを探してください。',
-    explanation: 'Service Map で checkout の下流を確認すると、payment サービスへの接続が赤く表示されエラーが発生しています。payment サービスのバグバージョン（v350.10）が約50%のリクエストで HTTP 401 エラーを返しており、外部決済ゲートウェイ（ButtercupPayments）が根本原因です。Service Map はエラーの伝播経路を視覚的に把握するのに効果的です。',
+    hint: 'APM > Service Map を開き、checkout サービスのノードをクリックしてください。下流サービスへの接続線の色を確認し、Root Causeとなっているサービスを探してください。',
+    explanation: 'Service Map で checkout の下流を確認すると、payment サービスへの接続が赤く表示されエラーが発生していますが、網掛けの赤は根本原因ではなく波及エラーを表します。外部決済サービス（ButtercupPayments）が根本原因です。Service Map はエラーの伝播経路を視覚的に把握するのに効果的です。',
   },
 
   // Q9: APM Tag Spotlight - バージョン起因のエラーを特定
@@ -148,8 +148,8 @@ export const QUESTIONS: Question[] = [
     service: 'payment',
     trigger_type: 'alert',
     difficulty: 'hard',
-    scenario: '前の調査でが checkout エラーの発生元が判明しました。SRE チームは対応策を検討していますが、まず「どこに根本原因があるか」を正確に特定する必要があります。APM の Tag Spotlight を使って調査してください。',
-    question_text: 'APM の Tag Spotlight で payment サービスのスパンを version タグで分析し、エラー率が高いバージョン番号を答えてください。',
+    scenario: '前の調査でが checkout エラーの発生元が判明しました。SRE チームは対応策を検討していますが、まず「根本原因が何か」を正確に特定する必要があります。APM の Tag Spotlight を使って調査してください。',
+    question_text: 'APM の Tag Spotlight で payment サービスのスパンをタグ別に分析し、エラー率が高いタグの値を答えてください。',
     answer_keywords: ['v350.10', '350.10'],
     base_points: 100,
     stage: 1,
