@@ -43,6 +43,17 @@ Parameters:
     Default: "1"
     Description: Increment to force ECS task definition update when using latest tag
 
+  SplunkAccessToken:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Splunk access token for APM/Metrics ingest (INGEST scope)
+
+  AppVersion:
+    Type: String
+    Default: "dev"
+    Description: Application version (git SHA) injected as service.version tag
+
 Conditions:
   ShouldCreateDynamoDB: !Equals [!Ref CreateDynamoDB, "true"]
 
@@ -238,6 +249,12 @@ Resources:
             Value: !Ref AdminPassword
           - Name: IMAGE_VERSION
             Value: !Ref ImageVersion
+          - Name: SPLUNK_ACCESS_TOKEN
+            Value: !Ref SplunkAccessToken
+          - Name: OTEL_SERVICE_NAME
+            Value: gameday-admin
+          - Name: OTEL_RESOURCE_ATTRIBUTES
+            Value: !Sub "deployment.environment=${ClusterName},service.version=${AppVersion}"
       ScalingTarget:
         MinTaskCount: 1
         MaxTaskCount: 2

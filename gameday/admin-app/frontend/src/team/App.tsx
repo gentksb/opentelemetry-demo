@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'preact/hooks';
+import { useState, useCallback, useEffect } from 'preact/hooks';
 import useSWR from 'swr';
 import { apiFetch } from '../api/client';
 import type { Config } from '../api/types';
@@ -13,6 +13,7 @@ import { TeamInfo } from '../components/team/TeamInfo';
 import { ProgressSummary } from '../components/team/ProgressSummary';
 import { Leaderboard } from '../components/team/Leaderboard';
 import { QuestionList } from '../components/team/QuestionList';
+import { setRumTeamId } from '../rum';
 
 export function App() {
   const [currentTeamId, setCurrentTeamId] = useState<string | null>(() => {
@@ -20,6 +21,10 @@ export function App() {
   });
 
   const isLoggedIn = currentTeamId !== null;
+
+  useEffect(() => {
+    setRumTeamId(currentTeamId);
+  }, [currentTeamId]);
 
   const { data: config } = useSWR<Config>(
     isLoggedIn ? '/api/config' : null,

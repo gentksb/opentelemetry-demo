@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@splunk/otel-web": "^2.0.0",
     "preact": "^10.25.0",
     "swr": "^2.4.0"
   },

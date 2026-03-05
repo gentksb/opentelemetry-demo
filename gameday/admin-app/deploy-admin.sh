@@ -19,6 +19,8 @@ IMAGE_TAG="latest"
 CREATE_DYNAMODB="false"
 CLUSTER_NAME=""
 SPLUNK_REALM="jp0"
+SPLUNK_ACCESS_TOKEN=""
+SPLUNK_RUM_TOKEN=""
 ADMIN_PASSWORD=""
 
 # Colors for output
@@ -42,6 +44,8 @@ Options:
   --stack-name NAME      CloudFormation stack name (default: gameday-admin-{environment})
   --image-tag TAG        Docker image tag (default: latest)
   --create-dynamodb      Create DynamoDB tables (skip if already exist in another stack)
+  --splunk-access-token  Splunk access token for APM/Metrics ingest
+  --rum-token            Splunk RUM token for browser RUM (baked into frontend at build time)
   --skip-build           Skip Docker build and ECR push (use existing image)
   --dry-run              Show what would be deployed without deploying
   --delete               Delete the stack and ECR repository
@@ -108,6 +112,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --splunk-realm)
             SPLUNK_REALM="$2"
+            shift 2
+            ;;
+        --splunk-access-token)
+            SPLUNK_ACCESS_TOKEN="$2"
+            shift 2
+            ;;
+        --rum-token)
+            SPLUNK_RUM_TOKEN="$2"
             shift 2
             ;;
         --admin-password)
@@ -289,7 +301,13 @@ if [[ "$SKIP_BUILD" != "true" ]]; then
 
         # Build
         log_info "Building Docker image..."
-        docker build -t "${ECR_REPO_NAME}:${IMAGE_TAG}" "$SCRIPT_DIR"
+        APP_VERSION=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "dev")
+        docker build \
+            --build-arg SPLUNK_RUM_TOKEN="$SPLUNK_RUM_TOKEN" \
+            --build-arg SPLUNK_REALM="$SPLUNK_REALM" \
+            --build-arg APP_VERSION="$APP_VERSION" \
+            --build-arg DEPLOYMENT_ENV="$CLUSTER_NAME" \
+            -t "${ECR_REPO_NAME}:${IMAGE_TAG}" "$SCRIPT_DIR"
 
         # Tag
         docker tag "${ECR_REPO_NAME}:${IMAGE_TAG}" "$IMAGE_URI"
@@ -313,6 +331,7 @@ log_step "Step 3: Deploying CloudFormation stack..."
 
 # 既存スタックが存在する場合、パラメータを安全に引き継ぐ
 ADMIN_PASSWORD_PARAM="AdminPassword=${ADMIN_PASSWORD}"
+SPLUNK_ACCESS_TOKEN_PARAM="SplunkAccessToken=${SPLUNK_ACCESS_TOKEN}"
 if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGION" &>/dev/null 2>&1; then
     log_info "既存スタックを検出。パラメータの整合性を確認します..."
 
@@ -331,9 +350,16 @@ if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGI
         ADMIN_PASSWORD_PARAM="ParameterKey=AdminPassword,UsePreviousValue=true"
         log_info "AdminPasswordは前回の値を引き継ぎます"
     fi
+
+    # SplunkAccessToken: 未指定の場合は前回値を引き継ぐ（NoEchoパラメータの安全な処理）
+    if [[ -z "$SPLUNK_ACCESS_TOKEN" ]]; then
+        SPLUNK_ACCESS_TOKEN_PARAM="ParameterKey=SplunkAccessToken,UsePreviousValue=true"
+        log_info "SplunkAccessTokenは前回の値を引き継ぎます"
+    fi
 fi
 
 if [[ "$DRY_RUN" != "true" ]]; then
+    APP_VERSION=${APP_VERSION:-$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "dev")}
     aws cloudformation deploy \
         --template-file "${SCRIPT_DIR}/template.yaml" \
         --stack-name "$STACK_NAME" \
@@ -345,6 +371,8 @@ if [[ "$DRY_RUN" != "true" ]]; then
             ClusterName="$CLUSTER_NAME" \
             SplunkRealm="$SPLUNK_REALM" \
             "$ADMIN_PASSWORD_PARAM" \
+            "$SPLUNK_ACCESS_TOKEN_PARAM" \
+            AppVersion="$APP_VERSION" \
             ImageVersion="$(date +%s)" \
         --capabilities CAPABILITY_NAMED_IAM \
         --tags \

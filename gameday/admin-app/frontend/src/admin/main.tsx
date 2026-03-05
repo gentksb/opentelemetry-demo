@@ -1,3 +1,4 @@
+import '../rum';
 import { render } from 'preact';
 import '../styles/admin.css';
 import { App } from './App';
