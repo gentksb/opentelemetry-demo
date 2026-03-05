@@ -24,6 +24,7 @@ export function App() {
   const { data: config } = useSWR<Config>(
     isLoggedIn ? '/api/config' : null,
     (url: string) => apiFetch<Config>(url),
+    { refreshInterval: 15000 },
   );
   const splunkRealm = config?.splunk_realm || 'jp0';
   const orgId = config?.splunk_org_id;
@@ -83,7 +84,7 @@ export function App() {
 
       <ScenarioBanner astronomyShopUrl={astronomyShopUrl} />
 
-      <O11yLinks clusterName={otelEnv} splunkRealm={splunkRealm} orgId={orgId} />
+      {config !== undefined && <O11yLinks envName={otelEnv} splunkRealm={splunkRealm} orgId={orgId} />}
 
       <RulesPanel />
 

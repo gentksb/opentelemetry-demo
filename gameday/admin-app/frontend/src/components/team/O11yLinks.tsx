@@ -1,27 +1,14 @@
 interface O11yLinksProps {
-  clusterName: string;
+  envName: string;
   splunkRealm: string;
   orgId?: string;
 }
 
-export function O11yLinks({ clusterName, splunkRealm, orgId }: O11yLinksProps) {
+export function O11yLinks({ envName, splunkRealm, orgId }: O11yLinksProps) {
   const base = `https://app.${splunkRealm}.signalfx.com`;
-  const envName = clusterName;
   const orgParam = orgId ? `&orgID=${orgId}` : '';
 
-  const apmUrl =
-    `${base}/#/apm?environments=${encodeURIComponent(envName)}${orgParam}`;
-
-  const imUrl =
-    `${base}/#/kubernetes-overview?endTime=now` +
-    `&sf_environment=${encodeURIComponent(envName)}` +
-    `&sources%5B%5D=sf_environment:%5B%22${encodeURIComponent(envName)}%22%5D` +
-    `&startTime=-1d${orgParam}`;
-
-  const rumFilters = JSON.stringify([{ tag: 'sf_environment', operation: 'IN', values: [envName] }]);
-  const rumUrl = `${base}/#/rum?filters=${encodeURIComponent(rumFilters)}${orgParam}`;
-
-  if (!clusterName) {
+  if (!envName) {
     return (
       <details class="o11y-links">
         <summary>Splunk Observability Cloud リンク</summary>
@@ -35,6 +22,18 @@ export function O11yLinks({ clusterName, splunkRealm, orgId }: O11yLinksProps) {
       </details>
     );
   }
+
+  const apmUrl =
+    `${base}/#/apm?environments=${encodeURIComponent(envName)}${orgParam}`;
+
+  const imUrl =
+    `${base}/#/kubernetes-overview?endTime=now` +
+    `&sf_environment=${encodeURIComponent(envName)}` +
+    `&sources%5B%5D=sf_environment:%5B%22${encodeURIComponent(envName)}%22%5D` +
+    `&startTime=-1d${orgParam}`;
+
+  const rumFilters = JSON.stringify([{ tag: 'sf_environment', operation: 'IN', values: [envName] }]);
+  const rumUrl = `${base}/#/rum?filters=${encodeURIComponent(rumFilters)}${orgParam}`;
 
   return (
     <details class="o11y-links">
