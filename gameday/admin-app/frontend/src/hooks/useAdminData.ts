@@ -99,6 +99,14 @@ export function useAdminData({ token, onAuthRequired }: UseAdminDataOptions) {
     });
   }, [token]);
 
+  const updateOtelEnv = useCallback(async (env: string) => {
+    await authFetch(token ?? '', '/api/admin/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ otel_env: env }),
+    });
+  }, [token]);
+
   return {
     scoreboard,
     stats,
@@ -113,5 +121,6 @@ export function useAdminData({ token, onAuthRequired }: UseAdminDataOptions) {
     recalculateScores,
     updateOrgId,
     updateAstronomyShopUrl,
+    updateOtelEnv,
   };
 }

@@ -25,10 +25,11 @@ export function App() {
     isLoggedIn ? '/api/config' : null,
     (url: string) => apiFetch<Config>(url),
   );
-  const clusterName = config?.cluster_name || '';
   const splunkRealm = config?.splunk_realm || 'jp0';
   const orgId = config?.splunk_org_id;
   const astronomyShopUrl = config?.astronomy_shop_url;
+  // otel_env が設定されていればそれを使用。未設定時は空文字（O11yLinks 側で警告表示）
+  const otelEnv = config?.otel_env || '';
 
   const { data: gameState } = useGameState(isLoggedIn);
   const {
@@ -82,7 +83,7 @@ export function App() {
 
       <ScenarioBanner astronomyShopUrl={astronomyShopUrl} />
 
-      <O11yLinks clusterName={clusterName} splunkRealm={splunkRealm} orgId={orgId} />
+      <O11yLinks clusterName={otelEnv} splunkRealm={splunkRealm} orgId={orgId} />
 
       <RulesPanel />
 

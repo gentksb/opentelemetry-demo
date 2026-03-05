@@ -21,6 +21,10 @@ let splunkOrgId: string = '';
 // Astronomy Shop URL（イベントごとに管理者が設定。インメモリ）
 let astronomyShopUrl: string = '';
 
+// OTel deployment.environment タグ値（イベントごとに管理者が設定。インメモリ）
+// deploy-teams.sh で生成された OTEL_ENV (例: gameday-kind-3f2a1b) を設定する。
+let otelEnv: string = '';
+
 // ゲーム状態を外部から取得するためのエクスポート関数
 export function getGameState(): 'waiting' | 'active' | 'finished' {
   return gameState;
@@ -36,6 +40,10 @@ export function getSplunkOrgId(): string {
 
 export function getAstronomyShopUrl(): string {
   return astronomyShopUrl;
+}
+
+export function getOtelEnv(): string {
+  return otelEnv;
 }
 
 // ゲーム開始 - 全チームの started_at を現在時刻にリセットし、一斉スタートとする
@@ -295,11 +303,11 @@ router.post('/recalculate-scores', async (req: Request, res: Response) => {
 
 // 設定取得・更新（管理者専用）
 router.get('/config', (req: Request, res: Response) => {
-  res.json({ splunk_org_id: splunkOrgId, astronomy_shop_url: astronomyShopUrl });
+  res.json({ splunk_org_id: splunkOrgId, astronomy_shop_url: astronomyShopUrl, otel_env: otelEnv });
 });
 
 router.put('/config', (req: Request, res: Response) => {
-  const { org_id, astronomy_shop_url } = req.body;
+  const { org_id, astronomy_shop_url, otel_env } = req.body;
   if (org_id !== undefined) {
     if (typeof org_id !== 'string') {
       return res.status(400).json({ error: 'org_id must be a string' });
@@ -316,7 +324,13 @@ router.put('/config', (req: Request, res: Response) => {
     }
     astronomyShopUrl = trimmed;
   }
-  res.json({ splunk_org_id: splunkOrgId, astronomy_shop_url: astronomyShopUrl });
+  if (otel_env !== undefined) {
+    if (typeof otel_env !== 'string') {
+      return res.status(400).json({ error: 'otel_env must be a string' });
+    }
+    otelEnv = otel_env.trim();
+  }
+  res.json({ splunk_org_id: splunkOrgId, astronomy_shop_url: astronomyShopUrl, otel_env: otelEnv });
 });
 
 // 全問題取得（管理者ビュー、回答キーワード付き）

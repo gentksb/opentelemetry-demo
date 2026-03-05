@@ -21,18 +21,31 @@ export function O11yLinks({ clusterName, splunkRealm, orgId }: O11yLinksProps) {
   const rumFilters = JSON.stringify([{ tag: 'sf_environment', operation: 'IN', values: [envName] }]);
   const rumUrl = `${base}/#/rum?filters=${encodeURIComponent(rumFilters)}${orgParam}`;
 
+  if (!clusterName) {
+    return (
+      <details class="o11y-links">
+        <summary>Splunk Observability Cloud リンク</summary>
+        <div style="margin:10px 0;padding:12px 16px;background:rgba(255,165,0,0.12);border:1px solid rgba(255,165,0,0.4);border-radius:5px;">
+          <strong style="color:#ffa500;">⚠ 環境名が設定されていません</strong>
+          <br />
+          <small style="color:rgba(255,255,255,0.7);">
+            管理者に OTel Environment の設定を依頼してください。設定後にリンクが利用可能になります。
+          </small>
+        </div>
+      </details>
+    );
+  }
+
   return (
     <details class="o11y-links">
       <summary>Splunk Observability Cloud リンク</summary>
-      {clusterName && (
-        <div style="margin:10px 0;padding:10px;background:rgba(0,212,255,0.1);border-radius:5px;">
-          あなたのEnvironment: <code style="color:#00ff88;font-size:1.1rem;">{envName}</code>
-          <br />
-          <small style="color:rgba(255,255,255,0.6);">
-            APMやInfrastructure Monitoringでこの値でフィルタしてください
-          </small>
-        </div>
-      )}
+      <div style="margin:10px 0;padding:10px;background:rgba(0,212,255,0.1);border-radius:5px;">
+        あなたのEnvironment: <code style="color:#00ff88;font-size:1.1rem;">{envName}</code>
+        <br />
+        <small style="color:rgba(255,255,255,0.6);">
+          APMやInfrastructure Monitoringでこの値でフィルタしてください
+        </small>
+      </div>
       <ul>
         <li>
           <a href={apmUrl} target="_blank" rel="noopener noreferrer">

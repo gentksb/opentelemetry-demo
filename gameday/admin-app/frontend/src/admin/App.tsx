@@ -29,6 +29,7 @@ export function App() {
     recalculateScores,
     updateOrgId,
     updateAstronomyShopUrl,
+    updateOtelEnv,
   } = useAdminData({ token: adminToken, onAuthRequired });
 
   const handleLogin = (token: string) => {
@@ -50,6 +51,19 @@ export function App() {
       setTimeout(() => setRecalcMessage(''), 3000);
     } catch {
       setRecalcMessage('スコア再計算に失敗しました');
+    }
+  };
+
+  const [otelEnvInput, setOtelEnvInput] = useState('');
+  const [otelEnvMessage, setOtelEnvMessage] = useState('');
+
+  const handleUpdateOtelEnv = async () => {
+    try {
+      await updateOtelEnv(otelEnvInput);
+      setOtelEnvMessage('Environment を更新しました');
+      setTimeout(() => setOtelEnvMessage(''), 3000);
+    } catch {
+      setOtelEnvMessage('更新に失敗しました');
     }
   };
 
@@ -102,6 +116,29 @@ export function App() {
           onStop={stopGame}
           onReset={resetGame}
         />
+
+        <section style="margin-bottom:1.5rem;padding:1rem;background:rgba(255,165,0,0.08);border:1px solid rgba(255,165,0,0.3);border-radius:8px;">
+          <h2 style="margin:0 0 0.75rem;font-size:1rem;color:rgba(255,165,0,0.9);">OTel Environment 設定 <span style="font-size:0.75rem;font-weight:normal;color:rgba(255,165,0,0.6);">（必須）</span></h2>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <input
+              type="text"
+              placeholder="例: gameday-kind-3f2a1b"
+              value={otelEnvInput}
+              onInput={(e) => setOtelEnvInput((e.target as HTMLInputElement).value)}
+              style="flex:1;min-width:200px;padding:0.5rem 0.75rem;background:rgba(255,255,255,0.1);border:1px solid rgba(255,165,0,0.4);border-radius:4px;color:#fff;font-size:0.9rem;"
+            />
+            <button type="button" class="action-btn" onClick={handleUpdateOtelEnv}>
+              保存
+            </button>
+            {otelEnvMessage && (
+              <span style="color:#00ff88;font-size:0.85rem;">{otelEnvMessage}</span>
+            )}
+          </div>
+          <small style="color:rgba(255,165,0,0.6);margin-top:0.4rem;display:block;">
+            deploy-teams.sh 完了後に表示される <code style="color:#ffa500;">Environment tag: gameday-kind-XXXXXX</code> の値を入力してください。
+            チーム画面の O11y リンクフィルタと環境名表示に使用されます。未設定の場合はチーム画面に警告が表示されます。
+          </small>
+        </section>
 
         <section style="margin-bottom:1.5rem;padding:1rem;background:rgba(255,255,255,0.05);border-radius:8px;">
           <h2 style="margin:0 0 0.75rem;font-size:1rem;color:rgba(255,255,255,0.7);">Splunk Org ID 設定</h2>

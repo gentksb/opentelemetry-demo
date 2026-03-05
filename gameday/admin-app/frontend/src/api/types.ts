@@ -11,6 +11,7 @@ export interface Config {
   splunk_realm: string;
   splunk_org_id?: string;
   astronomy_shop_url?: string;
+  otel_env?: string; // deployment.environment タグ値。管理者が設定。未設定時は空文字。
 }
 
 // チーム情報
