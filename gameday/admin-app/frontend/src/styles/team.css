@@ -138,19 +138,17 @@ h1 {
   font-weight: bold;
   flex-shrink: 0;
 }
-.scenario-text {
-  font-size: 0.9rem;
-  color: rgba(255,255,255,0.75);
-  background: rgba(255,255,255,0.04);
-  border-left: 3px solid rgba(255,255,255,0.2);
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  border-radius: 0 5px 5px 0;
-  line-height: 1.6;
-}
-.question-text {
-  font-size: 1.1rem;
+.question-body {
+  font-size: 1.05rem;
+  line-height: 1.7;
   margin-bottom: 15px;
+  color: #fff;
+}
+.question-body p {
+  margin-bottom: 10px;
+}
+.question-body p:last-child {
+  margin-bottom: 0;
 }
 .answer-form {
   display: flex;
@@ -251,6 +249,29 @@ h1 {
 .game-status-banner.finished {
   background: rgba(255,107,107,0.2); border: 1px solid #ff6b6b; color: #ff6b6b;
 }
+.scenario-banner {
+  background: rgba(255,193,7,0.1);
+  border: 1px solid rgba(255,193,7,0.35);
+  padding: 15px 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+.scenario-banner summary {
+  cursor: pointer;
+  font-weight: bold;
+  color: #ffc107;
+}
+.scenario-banner-content {
+  margin-top: 12px;
+  line-height: 1.7;
+  color: rgba(255,255,255,0.85);
+}
+.scenario-banner-content p {
+  margin-bottom: 8px;
+}
+.scenario-banner-content p:last-child {
+  margin-bottom: 0;
+}
 .o11y-links {
   background: rgba(92,107,192,0.2); border: 1px solid #5c6bc0;
   padding: 15px 20px; border-radius: 10px; margin-bottom: 20px;
@@ -267,8 +288,17 @@ h1 {
 .rules-panel ul { margin: 10px 0 0 20px; line-height: 1.8; color: rgba(255,255,255,0.8); }
 .rules-panel strong { color: #00ff88; }
 .hint-text {
-  font-size: 0.85rem; color: rgba(255,255,255,0.5); margin-bottom: 10px;
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.65);
+  margin-bottom: 10px;
   font-style: italic;
+  padding-left: 1.2em;
+  position: relative;
+}
+.hint-text::before {
+  content: '\1F4A1 ';
+  position: absolute;
+  left: 0;
 }
 .explanation-box {
   margin-top: 10px; padding: 12px; border-radius: 5px;

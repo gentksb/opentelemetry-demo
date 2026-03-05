@@ -6,6 +6,7 @@ import { useGameState } from '../hooks/useGameState';
 import { useTeamData } from '../hooks/useTeamData';
 import { LoginForm } from '../components/team/LoginForm';
 import { GameStatusBanner } from '../components/team/GameStatusBanner';
+import { ScenarioBanner } from '../components/team/ScenarioBanner';
 import { O11yLinks } from '../components/team/O11yLinks';
 import { RulesPanel } from '../components/team/RulesPanel';
 import { TeamInfo } from '../components/team/TeamInfo';
@@ -35,6 +36,7 @@ export function App() {
     leaderboard,
     explanationCache,
     incorrectCache,
+    pointsCache,
     loading,
     submitAnswer,
   } = useTeamData(currentTeamId);
@@ -77,6 +79,8 @@ export function App() {
 
       <GameStatusBanner gameState={gameState} />
 
+      <ScenarioBanner />
+
       <O11yLinks clusterName={clusterName} splunkRealm={splunkRealm} orgId={orgId} />
 
       <RulesPanel />
@@ -106,6 +110,7 @@ export function App() {
           gameState={gameState?.state ?? 'waiting'}
           explanationCache={explanationCache}
           incorrectCache={incorrectCache}
+          pointsCache={pointsCache}
           onSubmit={submitAnswer}
         />
       )}

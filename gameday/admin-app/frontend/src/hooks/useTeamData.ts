@@ -10,6 +10,7 @@ import type {
 
 export function useTeamData(teamId: string | null) {
   const [explanationCache, setExplanationCache] = useState<Record<string, string>>({});
+  const [pointsCache, setPointsCache] = useState<Record<string, number>>({});
   const [incorrectCache, setIncorrectCache] = useState<
     Record<string, { message: string; attemptCount: number }>
   >({});
@@ -49,6 +50,9 @@ export function useTeamData(teamId: string | null) {
       });
 
       if (result.result === 'correct') {
+        if (result.answer?.points_awarded !== undefined) {
+          setPointsCache((prev) => ({ ...prev, [questionId]: result.answer.points_awarded }));
+        }
         if (result.explanation) {
           setExplanationCache((prev) => ({ ...prev, [questionId]: result.explanation! }));
         }
@@ -81,6 +85,7 @@ export function useTeamData(teamId: string | null) {
     leaderboard,
     explanationCache,
     incorrectCache,
+    pointsCache,
     loading,
     submitAnswer,
   };

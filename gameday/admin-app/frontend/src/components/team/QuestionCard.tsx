@@ -13,6 +13,7 @@ interface QuestionCardProps {
   gameState: string;
   explanationCache: Record<string, string>;
   incorrectCache: Record<string, { message: string; attemptCount: number }>;
+  pointsCache: Record<string, number>;
   onSubmit: (questionId: string, answerText: string) => Promise<AnswerResult>;
 }
 
@@ -22,6 +23,7 @@ export function QuestionCard({
   gameState,
   explanationCache,
   incorrectCache,
+  pointsCache,
   onSubmit,
 }: QuestionCardProps) {
   const [answer, setAnswer] = useState('');
@@ -71,17 +73,25 @@ export function QuestionCard({
       <div class="question-card answered">
         <div class="question-header">
           <div class="question-header-left">
-            <span class="question-service">Q{questionIndex} - {question.service}</span>
+            <span class="question-service">Q{questionIndex}</span>
             {triggerLabel && (
               <span class={`trigger-badge trigger-${question.trigger_type}`}>{triggerLabel}</span>
             )}
             {isHard && <span class="difficulty-badge difficulty-hard">難問</span>}
           </div>
-          <span class="question-points">{question.base_points}点</span>
+          <span class="question-points">
+            {pointsCache[question.question_id] !== undefined
+              ? `${pointsCache[question.question_id]}/${question.base_points}点`
+              : `${question.base_points}点`}
+          </span>
         </div>
-        {question.scenario && <div class="scenario-text">{question.scenario}</div>}
-        <div class="question-text">{question.question_text}</div>
-        <div class="result-message correct">正解済み</div>
+        <div class="question-body">
+          {question.scenario && <p>{question.scenario}</p>}
+          <p>{question.question_text}</p>
+        </div>
+        <div class="result-message correct">
+          正解済み ✓{pointsCache[question.question_id] !== undefined ? ` +${pointsCache[question.question_id]}点` : ''}
+        </div>
         {explanation && <div class="explanation-box">{explanation}</div>}
       </div>
     );
@@ -91,7 +101,7 @@ export function QuestionCard({
     <div class="question-card">
       <div class="question-header">
         <div class="question-header-left">
-          <span class="question-service">Q{questionIndex} - {question.service}</span>
+          <span class="question-service">Q{questionIndex}</span>
           {triggerLabel && (
             <span class={`trigger-badge trigger-${question.trigger_type}`}>{triggerLabel}</span>
           )}
@@ -99,8 +109,10 @@ export function QuestionCard({
         </div>
         <span class="question-points">{question.base_points}点</span>
       </div>
-      {question.scenario && <div class="scenario-text">{question.scenario}</div>}
-      <div class="question-text">{question.question_text}</div>
+      <div class="question-body">
+        {question.scenario && <p>{question.scenario}</p>}
+        <p>{question.question_text}</p>
+      </div>
       {question.hint && <div class="hint-text">{question.hint}</div>}
       <div class="answer-form">
         <input

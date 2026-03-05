@@ -11,6 +11,7 @@ SPLUNK_REALM="jp0"
 CLUSTER_NAME="gameday-otel-demo"
 REGION="ap-northeast-1"
 MANIFEST_VERSION="1.5.5"
+ENV_ID=""
 
 # Colors for output
 RED='\033[0;31m'
@@ -33,6 +34,8 @@ Optional:
   --splunk-realm REALM   Splunk realm (default: jp0)
   --rum-token TOKEN      Splunk RUM token (required for Browser RUM and Session Replay)
   --cluster-name NAME    Kubernetes cluster name (default: gameday-otel-demo)
+                         OTel environment tag is {cluster-name}-{6char-hash}
+  --env-id ID            OTel environment tag suffix (default: auto-generated 6-char hex)
   --region REGION        AWS region (default: ap-northeast-1)
   --manifest-version VER Manifest version (default: 1.5.5)
   --enable-flags         Enable all Game Day feature flags after deployment
@@ -139,6 +142,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --cluster-name)
             CLUSTER_NAME="$2"
+            shift 2
+            ;;
+        --env-id)
+            ENV_ID="$2"
             shift 2
             ;;
         --region)
@@ -261,7 +268,7 @@ if [[ "$SKIP_COLLECTOR" != "true" ]]; then
             --set="splunkObservability.accessToken=${SPLUNK_TOKEN}" \
             --set="splunkObservability.realm=${SPLUNK_REALM}" \
             --set="clusterName=${CLUSTER_NAME}" \
-            --set="environment=${CLUSTER_NAME}" \
+            --set="environment=${OTEL_ENV}" \
             --namespace splunk-monitoring \
             --create-namespace \
             --wait
@@ -272,12 +279,19 @@ if [[ "$SKIP_COLLECTOR" != "true" ]]; then
     fi
 fi
 
+# Generate unique OTel environment tag
+if [[ -z "$ENV_ID" ]]; then
+    ENV_ID=$(openssl rand -hex 3)
+fi
+OTEL_ENV="${CLUSTER_NAME}-${ENV_ID}"
+log_info "OTel environment tag: ${OTEL_ENV}"
+
 # Deploy application to single namespace
 log_step "Deploying application to namespace ${NAMESPACE}..."
 
 if [[ "$DRY_RUN" == "true" ]]; then
     log_info "[DRY-RUN] Would create namespace ${NAMESPACE} and deploy demo"
-    log_info "[DRY-RUN] Environment: ${CLUSTER_NAME}"
+    log_info "[DRY-RUN] Environment: ${OTEL_ENV}"
     if [[ "$ENABLE_FLAGS" == "true" ]]; then
         log_info "[DRY-RUN] Would enable Game Day feature flags"
     fi
@@ -300,8 +314,8 @@ kubectl create secret generic workshop-secret \
     --namespace "$NAMESPACE" \
     --from-literal=instance="shop-demo" \
     --from-literal=app="store" \
-    --from-literal=env="${CLUSTER_NAME}" \
-    --from-literal=deployment="deployment.environment=${CLUSTER_NAME}" \
+    --from-literal=env="${OTEL_ENV}" \
+    --from-literal=deployment="deployment.environment=${OTEL_ENV}" \
     --from-literal=realm="${SPLUNK_REALM}" \
     --from-literal=access_token="${SPLUNK_TOKEN}" \
     --from-literal=api_token="${SPLUNK_TOKEN}" \
@@ -325,7 +339,7 @@ kubectl apply --namespace "$NAMESPACE" -f "$MANIFEST_FILE" 2>&1 | \
 log_info "Patching deployments with environment..."
 for DEPLOYMENT in $(kubectl get deployments -n "$NAMESPACE" -o name 2>/dev/null); do
     kubectl set env "$DEPLOYMENT" -n "$NAMESPACE" \
-        OTEL_RESOURCE_ATTRIBUTES="service.namespace=opentelemetry-demo,deployment.environment=${CLUSTER_NAME}" \
+        OTEL_RESOURCE_ATTRIBUTES="service.namespace=opentelemetry-demo,deployment.environment=${OTEL_ENV}" \
         2>/dev/null || true
 done
 
@@ -363,12 +377,12 @@ fi
 echo ""
 log_info "=== Deployment Summary ==="
 log_info "Namespace: ${NAMESPACE}"
-log_info "Environment: ${CLUSTER_NAME}"
+log_info "Environment: ${OTEL_ENV}"
 log_info ""
 log_info "To access the frontend:"
 log_info "  http://<EC2_IP>:8080"
 log_info ""
 log_info "To view in Splunk APM, filter by environment:"
-log_info "  deployment.environment = ${CLUSTER_NAME}"
+log_info "  deployment.environment = ${OTEL_ENV}"
 
 log_info "Deployment completed successfully!"

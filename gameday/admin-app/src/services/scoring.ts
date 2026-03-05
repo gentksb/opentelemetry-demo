@@ -73,7 +73,7 @@ export const QUESTIONS: Question[] = [
     answer_keywords: ['redis', 'valkey'],
     base_points: 100,
     stage: 1,
-    hint: 'APM > Explore で cart サービスを選択し、Errors のフィルタでエラートレースを表示してください。エラーの原因を把握したら、Service Map に切り替えて cart サービスが接続しているデータストア（赤いノード）を確認してください。',
+    hint: 'APM Overview > Services で cart サービスを選択し、Tracesタブから Trace with errorsのサンプルをクリックしてみてください。Trace viewが開き、エラースパンは赤バッジで判別できます。エラーの原因を把握したら、Service Map に切り替えて cart サービスが接続しているデータストアを確認してください。',
     explanation: 'cart サービスのエラートレースで exception.message を確認すると、Valkey（Redis互換）への接続失敗が記録されています。Service Map では cart → redis としてデータストアへの依存関係が表示されます。トレースの例外メッセージで「何が起きたか」を把握し、Service Map で「どのサービスが関係しているか」を視覚的に確認する、という2段階の調査が実際のトラブルシューティングでも有効です。',
   },
 
@@ -93,20 +93,20 @@ export const QUESTIONS: Question[] = [
     explanation: 'RUM の Network Requests タブで画像リクエストを確認すると、P50・P75・P99 の全パーセンタイルで5秒以上の遅延が発生しています。P50（中央値）で遅延が出ているということは少なくとも半数以上のユーザーが影響を受けており、特定のユーザーや端末に限らない問題です。全パーセンタイルで遅延が一様に発生していることから、障害が全ユーザーに影響している可能性が高いと判断できます。パーセンタイル分布を見ることで、バックエンドのエラーログに現れない「体験の劣化」の影響範囲を定量的に把握できるのが RUM の強みです。',
   },
 
-  // Q4: Infrastructure Navigator - K8s コンテナの再起動異常を特定
+  // Q4: Infrastructure Navigator - K8s ネームスペースの把握
   {
-    question_id: 'q04-infra-restarts',
+    question_id: 'q04-k8s-namespace',
     flag_name: 'none',
-    service: 'checkout',
+    service: 'frontend',
     trigger_type: 'alert',
     difficulty: 'normal',
-    scenario: 'システムアラートで Kubernetes クラスタ上のコンテナが予期せぬ再起動をしていることが検知されました。どのサービスが不安定な状態にあるか、Infrastructure Navigator で調査してください。',
-    question_text: 'gameday-kindクラスタ("k8s.cluster.name = gameday-kind")のうち、過去24時間で再起動回数（Restarts）が最も多いコンテナ名を答えてください。',
-    answer_keywords: ['checkout', "cart"],
+    scenario: 'システムアラートで異常が検知されましたが、担当者はどのネームスペースにアプリがデプロイされているか把握していませんでした。インシデント対応の初動として、Infrastructure Monitoring を使ってクラスタ構成を素早く確認することになりました。',
+    question_text: 'Infrastructure Monitoring の Kubernetes Navigator で gameday-kind クラスタを確認し、OpenTelemetry Demo アプリケーションがデプロイされているネームスペース名を答えてください。',
+    answer_keywords: ['otel-demo'],
     base_points: 100,
     stage: 1,
-    hint: 'Splunk Observability Cloud > Infrastructure > Kubernetes entities を開いてください。フィルタで"k8s.cluster.name = gameday-kind"を設定して、Containers ビューに切り替えてください。Restarts の列に注目して、最も多く再起動しているコンテナを探してください。',
-    explanation: 'Kubernetes entities の Containers ビューで Restarts 列をクリックしてソート順を変更すると、最も多く再起動しているコンテナを特定できます。gameday-kind クラスタでは checkout と cart のコンテナが複数回再起動しています。Infrastructure からコンテナの状態を確認することで、APM のトレースやエラーログに現れないインフラ起因の不安定要因を特定できます。',
+    hint: 'Splunk Observability Cloud > Infrastructure > Kubernetes entities を開いてください。クラスタフィルタで "k8s.cluster.name = gameday-kind" を設定し、左側のビュー切り替えから Namespace ビューを選択してください。アプリケーションのネームスペースが一覧表示されます。',
+    explanation: 'Kubernetes Navigator の Namespace ビューを確認すると、ゲームデイの OpenTelemetry Demo は otel-demo ネームスペースにデプロイされていることが確認できます。Kubernetes ではネームスペースによってリソースを論理的に分離します。Infrastructure Monitoring の Navigator を使うことで、kubectl コマンドや SSH 接続なしにブラウザからクラスタ構成を素早く把握でき、インシデント対応の初動調査に役立ちます。',
   },
 
   // Q5: APM Latency - CPU高負荷によるレイテンシ悪化サービスを特定
@@ -118,7 +118,7 @@ export const QUESTIONS: Question[] = [
     difficulty: 'normal',
     scenario: 'Critical システムアラートで一部サービスのレイテンシが通常より大幅に高いことが検知されました。APM の Explore でサービス一覧のレイテンシを確認し、最も深刻なサービスを特定してください。',
     question_text: 'APM の Overview で Health が "Critical" になっており、レイテンシが秒単位に達しているサービス名を1つ答えてください。',
-    answer_keywords: ['ad', 'checkout', 'payment', 'flaged_ui'],
+    answer_keywords: ['ad', 'checkout', 'payment', 'flagd_ui'],
     base_points: 100,
     stage: 1,
     hint: 'APM > Overview を開いてください。画面下部に全サービスの一覧が表示されます。Latency の列を確認し、他のサービスと比べて際立って高い値を示しているサービスを探してください。',
@@ -148,7 +148,7 @@ export const QUESTIONS: Question[] = [
     service: 'payment',
     trigger_type: 'alert',
     difficulty: 'hard',
-    scenario: '前の調査でが checkout エラーの発生元が判明しました。SRE チームは対応策を検討していますが、まず「根本原因が何か」を正確に特定する必要があります。APM の Tag Spotlight を使って調査してください。',
+    scenario: 'checkout サービスのエラー率上昇が続いています。payment サービスで外部決済プロバイダーとの連携に問題がある可能性があります。APM の Tag Spotlight を使って詳しく調査してください。',
     question_text: 'APM の Tag Spotlight で payment サービスのスパンをタグ別に分析し、エラー率が高いタグの値を答えてください。',
     answer_keywords: ['v350.10', '350.10'],
     base_points: 100,

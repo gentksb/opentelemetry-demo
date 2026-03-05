@@ -18,6 +18,9 @@ export function O11yLinks({ clusterName, splunkRealm, orgId }: O11yLinksProps) {
     `&sources%5B%5D=sf_environment:%5B%22${encodeURIComponent(envName)}%22%5D` +
     `&startTime=-1d${orgParam}`;
 
+  const rumFilters = JSON.stringify([{ tag: 'sf_environment', operation: 'IN', values: [envName] }]);
+  const rumUrl = `${base}/#/rum?filters=${encodeURIComponent(rumFilters)}${orgParam}`;
+
   return (
     <details class="o11y-links">
       <summary>Splunk Observability Cloud リンク</summary>
@@ -39,6 +42,11 @@ export function O11yLinks({ clusterName, splunkRealm, orgId }: O11yLinksProps) {
         <li>
           <a href={imUrl} target="_blank" rel="noopener noreferrer">
             Infrastructure Monitoring
+          </a>
+        </li>
+        <li>
+          <a href={rumUrl} target="_blank" rel="noopener noreferrer">
+            RUM - エンドユーザーのブラウザ体験・ネットワーク遅延
           </a>
         </li>
       </ul>

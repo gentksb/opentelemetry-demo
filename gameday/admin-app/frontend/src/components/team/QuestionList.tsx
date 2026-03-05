@@ -6,6 +6,7 @@ interface QuestionListProps {
   gameState: string;
   explanationCache: Record<string, string>;
   incorrectCache: Record<string, { message: string; attemptCount: number }>;
+  pointsCache: Record<string, number>;
   onSubmit: (questionId: string, answerText: string) => Promise<AnswerResult>;
 }
 
@@ -14,6 +15,7 @@ export function QuestionList({
   gameState,
   explanationCache,
   incorrectCache,
+  pointsCache,
   onSubmit,
 }: QuestionListProps) {
   return (
@@ -26,6 +28,7 @@ export function QuestionList({
           gameState={gameState}
           explanationCache={explanationCache}
           incorrectCache={incorrectCache}
+          pointsCache={pointsCache}
           onSubmit={onSubmit}
         />
       ))}
