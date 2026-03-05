@@ -2,7 +2,7 @@ import { docClient, TABLES, GetCommand, QueryCommand, UpdateCommand } from './dy
 
 export interface Question {
   question_id: string;
-  flag_name: string;
+  flag_name: string | 'none'; // 関連するFeature Flag。'none'はFeature Flagに依存しない設問。
   service: string;
   trigger_type: 'customer' | 'colleague' | 'alert'; // シナリオの起点
   difficulty: 'normal' | 'hard'; // 難易度
@@ -10,7 +10,7 @@ export interface Question {
   question_text: string;
   answer_keywords: string[];
   base_points: number;
-  stage: number; // 1 = App failures
+  stage: number; // 1 = App failures, 2以降は構想のみで未実装
   hint: string; // O11yツールでの調査ヒント
   explanation: string; // 正解後の解説
 }
@@ -38,16 +38,16 @@ export interface TeamScore {
 
 // 全7問を同時出題。フラグ切替なしの単一フェーズ運用。
 // 必要なFeature Flags（全て同時にON）:
-//   cartFailure, imageSlowLoad, adHighCpu, paymentServiceFailure(default 50%)
+//   cartFailure, imageSlowLoad, adHighCpu, paymentFailure("50%")
 //
 // flag_name = 'none' の設問はFeature Flagに依存しない基本操作問題。
 //
 // 全設問は「顧客からの問い合わせ」「同僚からの相談」「システムアラート」のいずれかを
 // 起点とするSREロールプレイ形式。参加者はSREチームの一員として障害対応を行う。
 export const QUESTIONS: Question[] = [
-  // Q2: APM Service Map - サービス間の依存関係を把握
+  // Q1: APM Service Map - サービス間の依存関係を把握
   {
-    question_id: 'q02-service-map',
+    question_id: 'q01-service-map',
     flag_name: 'none',
     service: 'checkout',
     trigger_type: 'colleague',
@@ -61,14 +61,14 @@ export const QUESTIONS: Question[] = [
     explanation: 'Service Map で checkout の下流を確認すると、cart・product-catalog・currency・shipping・email・payment・kafka の7つのサービスへの依存関係があります。Service Map はサービス間の依存関係を俯瞰的に把握でき、障害時の影響範囲の見積もりに活用できます。',
   },
 
-  // Q3: APM Trace - 例外メッセージからデータストア障害を特定
+  // Q2: APM Trace - 例外メッセージからデータストア障害を特定
   {
-    question_id: 'q03-cart-failure',
+    question_id: 'q02-cart-failure',
     flag_name: 'cartFailure',
     service: 'cart',
     trigger_type: 'customer',
     difficulty: 'hard',
-    scenario: '顧客から「ショッピングカートを空にしようとするとエラーになる」と問い合わせがありました。cart サービスの EmptyCart 操作でエラーが発生しているようです。CS部門のコメントでは、エラーが発生する顧客は全体から見て僅かな割合ですが、エラーそのものは確実に発生しているそうです。',
+    scenario: '顧客から「ショッピングカートを空にしようとするとエラーになる」と問い合わせがありました。CS部門のコメントでは、エラーが発生する顧客は全体から見て僅かな割合ですが、エラーそのものは確実に発生しているそうです。',
     question_text: 'cart サービスのエラートレースを確認してください。Service Map 上で cart が接続しているデータストアのサービス名を答えてください。',
     answer_keywords: ['redis', 'valkey'],
     base_points: 100,
@@ -77,25 +77,25 @@ export const QUESTIONS: Question[] = [
     explanation: 'cart サービスのエラートレースで exception.message を確認すると、Valkey（Redis互換）への接続失敗が記録されています。Service Map では cart → redis としてデータストアへの依存関係が表示されます。トレースの例外メッセージで「何が起きたか」を把握し、Service Map で「どのサービスが関係しているか」を視覚的に確認する、という2段階の調査が実際のトラブルシューティングでも有効です。',
   },
 
-  // Q4: RUM Performance - 遅延の影響範囲を判断
+  // Q3: RUM Performance - 遅延の影響範囲を判断
   {
-    question_id: 'q04-image-slow-rum',
+    question_id: 'q03-image-slow-rum',
     flag_name: 'imageSlowLoad',
     service: 'frontend',
     trigger_type: 'customer',
     difficulty: 'normal',
     scenario: '複数の顧客から「商品画像の表示が異常に遅い」と報告がありました。画像は静的配信しており、バックエンドのエラーは出ていないようです。RUM（Real User Monitoring）でエンドユーザーの実体験を確認し、影響範囲を判断してください。',
-    question_text: 'RUM の Network Requests タブで画像リクエストの遅延状況を確認してください。「全ての顧客が影響を受けている可能性が高い」と言えますか？ YES か NO で答えてください。',
+    question_text: 'RUM の Network Requests タブで画像リクエストの遅延状況を確認してください。「多数の顧客が影響を受けている可能性が高い」と言えますか？ YES か NO で答えてください。',
     answer_keywords: ['yes', 'はい'],
     base_points: 100,
     stage: 1,
-    hint: 'Splunk Observability Cloud > RUM を開いてください。対象のアプリケーションを選択し、Network Requests タブを開いてください。Response Time でソートすると遅延しているリクエストが見つかります。テーブルに表示されている P50・P75・P99 の各パーセンタイル値を確認し、遅延が特定のユーザーに限られているか、広く発生しているかを判断してください。',
+    hint: 'Splunk Observability Cloud > Digital Experience > RUM を開いてください。対象のアプリケーションを選択し、Network Requests タブを開いてください。Response Time でソートすると遅延しているリクエストが見つかります。テーブルに表示されている P50・P75・P99 の各パーセンタイル値を確認し、遅延が特定のユーザーに限られているか、広く発生しているかを判断してください。',
     explanation: 'RUM の Network Requests タブで画像リクエストを確認すると、P50・P75・P99 の全パーセンタイルで5秒以上の遅延が発生しています。P50（中央値）で遅延が出ているということは少なくとも半数以上のユーザーが影響を受けており、特定のユーザーや端末に限らない問題です。全パーセンタイルで遅延が一様に発生していることから、障害が全ユーザーに影響している可能性が高いと判断できます。パーセンタイル分布を見ることで、バックエンドのエラーログに現れない「体験の劣化」の影響範囲を定量的に把握できるのが RUM の強みです。',
   },
 
-  // Q6: Infrastructure Navigator - K8s コンテナの再起動異常を特定
+  // Q4: Infrastructure Navigator - K8s コンテナの再起動異常を特定
   {
-    question_id: 'q06-infra-restarts',
+    question_id: 'q04-infra-restarts',
     flag_name: 'none',
     service: 'checkout',
     trigger_type: 'alert',
@@ -109,15 +109,15 @@ export const QUESTIONS: Question[] = [
     explanation: 'Kubernetes entities の Containers ビューで Restarts 列をクリックしてソート順を変更すると、最も多く再起動しているコンテナを特定できます。gameday-kind クラスタでは checkout と cart のコンテナが複数回再起動しています。Infrastructure からコンテナの状態を確認することで、APM のトレースやエラーログに現れないインフラ起因の不安定要因を特定できます。',
   },
 
-  // Q10: APM Latency - CPU高負荷によるレイテンシ悪化サービスを特定
+  // Q5: APM Latency - CPU高負荷によるレイテンシ悪化サービスを特定
   {
-    question_id: 'q10-ad-latency',
+    question_id: 'q05-ad-latency',
     flag_name: 'adHighCpu',
     service: 'ad',
     trigger_type: 'alert',
     difficulty: 'normal',
     scenario: 'Critical システムアラートで一部サービスのレイテンシが通常より大幅に高いことが検知されました。APM の Explore でサービス一覧のレイテンシを確認し、最も深刻なサービスを特定してください。',
-    question_text: 'APM の Overview で Health が "Critical" になっているサービスのレイテンシを確認し、突出して高いレイテンシを示しているサービス名を1つ答えてください。',
+    question_text: 'APM の Overview で Health が "Critical" になっており、レイテンシが秒単位に達しているサービス名を1つ答えてください。',
     answer_keywords: ['ad', 'checkout', 'payment', 'flaged_ui'],
     base_points: 100,
     stage: 1,
@@ -125,15 +125,15 @@ export const QUESTIONS: Question[] = [
     explanation: 'APM の Overview でサービス一覧のレイテンシを確認すると、突出して高いsec単位のレイテンシを示しているサービスがいくつかあります。APM Overview は「どのサービスが遅いか」を一覧で確認するための出発点として非常に有効です。',
   },
 
-  // Q7: APM Service Map - エラーの伝播経路を追跡
+  // Q6: APM Service Map - エラーの伝播経路を追跡
   {
-    question_id: 'q07-checkout-error',
+    question_id: 'q06-checkout-error',
     flag_name: 'paymentServiceFailure',
     service: 'checkout',
     trigger_type: 'alert',
     difficulty: 'normal',
     scenario: 'システムアラートで checkout サービスのエラー率上昇が検知されました。注文処理の約半数が失敗しているようです。Service Map で checkout サービスの下流を確認し、エラーの発生元を特定してください。',
-    question_text: 'Service Map で checkout サービスの下流を確認し、エラーが発生しているサービス名を答えてください。',
+    question_text: 'Service Map で checkout サービスの下流を確認し、根本原因となるエラーが発生しているサービス名を答えてください。',
     answer_keywords: ['ButtercupPayments'],
     base_points: 100,
     stage: 1,
@@ -141,9 +141,9 @@ export const QUESTIONS: Question[] = [
     explanation: 'Service Map で checkout の下流を確認すると、payment サービスへの接続が赤く表示されエラーが発生していますが、網掛けの赤は根本原因ではなく波及エラーを表します。外部決済サービス（ButtercupPayments）が根本原因です。Service Map はエラーの伝播経路を視覚的に把握するのに効果的です。',
   },
 
-  // Q9: APM Tag Spotlight - バージョン起因のエラーを特定
+  // Q7: APM Tag Spotlight - バージョン起因のエラーを特定
   {
-    question_id: 'q09-payment-version',
+    question_id: 'q07-payment-version',
     flag_name: 'paymentServiceFailure',
     service: 'payment',
     trigger_type: 'alert',

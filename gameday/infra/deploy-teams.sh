@@ -82,12 +82,12 @@ import json, sys
 data = json.load(sys.stdin)
 flags = data.get("flags", {})
 # Map of flag name -> target defaultVariant
+# Required flags for Game Day: cartFailure, imageSlowLoad, adHighCpu, paymentFailure(50%)
 targets = {
-    "productCatalogFailure": "on",
     "cartFailure": "on",
     "imageSlowLoad": "5sec",
     "adHighCpu": "on",
-    "paymentServiceFailure": "on",
+    "paymentFailure": "50%",
 }
 changed = []
 for flag_name, target_variant in targets.items():
