@@ -10,6 +10,7 @@ export interface Config {
   cluster_name: string;
   splunk_realm: string;
   splunk_org_id?: string;
+  astronomy_shop_url?: string;
 }
 
 // チーム情報

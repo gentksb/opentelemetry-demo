@@ -28,6 +28,7 @@ export function App() {
     resetTeam,
     recalculateScores,
     updateOrgId,
+    updateAstronomyShopUrl,
   } = useAdminData({ token: adminToken, onAuthRequired });
 
   const handleLogin = (token: string) => {
@@ -62,6 +63,19 @@ export function App() {
       setTimeout(() => setOrgIdMessage(''), 3000);
     } catch {
       setOrgIdMessage('更新に失敗しました');
+    }
+  };
+
+  const [shopUrlInput, setShopUrlInput] = useState('');
+  const [shopUrlMessage, setShopUrlMessage] = useState('');
+
+  const handleUpdateShopUrl = async () => {
+    try {
+      await updateAstronomyShopUrl(shopUrlInput);
+      setShopUrlMessage('URL を更新しました');
+      setTimeout(() => setShopUrlMessage(''), 3000);
+    } catch {
+      setShopUrlMessage('更新に失敗しました');
     }
   };
 
@@ -108,6 +122,28 @@ export function App() {
           </div>
           <small style="color:rgba(255,255,255,0.45);margin-top:0.4rem;display:block;">
             チーム画面のSplunk O11y Cloudリンクに自動付与されます。イベントごとに設定してください。
+          </small>
+        </section>
+
+        <section style="margin-bottom:1.5rem;padding:1rem;background:rgba(255,255,255,0.05);border-radius:8px;">
+          <h2 style="margin:0 0 0.75rem;font-size:1rem;color:rgba(255,255,255,0.7);">Astronomy Shop URL 設定</h2>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <input
+              type="url"
+              placeholder="例: http://1.2.3.4:8080"
+              value={shopUrlInput}
+              onInput={(e) => setShopUrlInput((e.target as HTMLInputElement).value)}
+              style="flex:1;min-width:200px;padding:0.5rem 0.75rem;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#fff;font-size:0.9rem;"
+            />
+            <button type="button" class="action-btn" onClick={handleUpdateShopUrl}>
+              保存
+            </button>
+            {shopUrlMessage && (
+              <span style="color:#00ff88;font-size:0.85rem;">{shopUrlMessage}</span>
+            )}
+          </div>
+          <small style="color:rgba(255,255,255,0.45);margin-top:0.4rem;display:block;">
+            チーム画面のゲームシナリオ「Astronomy Shop」にリンクとして表示されます。
           </small>
         </section>
 

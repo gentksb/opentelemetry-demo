@@ -91,6 +91,14 @@ export function useAdminData({ token, onAuthRequired }: UseAdminDataOptions) {
     });
   }, [token]);
 
+  const updateAstronomyShopUrl = useCallback(async (url: string) => {
+    await authFetch(token ?? '', '/api/admin/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ astronomy_shop_url: url }),
+    });
+  }, [token]);
+
   return {
     scoreboard,
     stats,
@@ -104,5 +112,6 @@ export function useAdminData({ token, onAuthRequired }: UseAdminDataOptions) {
     resetTeam,
     recalculateScores,
     updateOrgId,
+    updateAstronomyShopUrl,
   };
 }

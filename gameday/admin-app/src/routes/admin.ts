@@ -18,6 +18,9 @@ let gameStartedAt: string | null = null;
 // Splunk Org ID（イベントごとに管理者が設定。インメモリ）
 let splunkOrgId: string = '';
 
+// Astronomy Shop URL（イベントごとに管理者が設定。インメモリ）
+let astronomyShopUrl: string = '';
+
 // ゲーム状態を外部から取得するためのエクスポート関数
 export function getGameState(): 'waiting' | 'active' | 'finished' {
   return gameState;
@@ -29,6 +32,10 @@ export function getGameStartedAt(): string | null {
 
 export function getSplunkOrgId(): string {
   return splunkOrgId;
+}
+
+export function getAstronomyShopUrl(): string {
+  return astronomyShopUrl;
 }
 
 // ゲーム開始 - 全チームの started_at を現在時刻にリセットし、一斉スタートとする
@@ -286,18 +293,30 @@ router.post('/recalculate-scores', async (req: Request, res: Response) => {
   }
 });
 
-// Splunk Org ID 取得・更新（管理者専用）
+// 設定取得・更新（管理者専用）
 router.get('/config', (req: Request, res: Response) => {
-  res.json({ splunk_org_id: splunkOrgId });
+  res.json({ splunk_org_id: splunkOrgId, astronomy_shop_url: astronomyShopUrl });
 });
 
 router.put('/config', (req: Request, res: Response) => {
-  const { org_id } = req.body;
-  if (typeof org_id !== 'string') {
-    return res.status(400).json({ error: 'org_id must be a string' });
+  const { org_id, astronomy_shop_url } = req.body;
+  if (org_id !== undefined) {
+    if (typeof org_id !== 'string') {
+      return res.status(400).json({ error: 'org_id must be a string' });
+    }
+    splunkOrgId = org_id.trim();
   }
-  splunkOrgId = org_id.trim();
-  res.json({ splunk_org_id: splunkOrgId });
+  if (astronomy_shop_url !== undefined) {
+    if (typeof astronomy_shop_url !== 'string') {
+      return res.status(400).json({ error: 'astronomy_shop_url must be a string' });
+    }
+    const trimmed = astronomy_shop_url.trim();
+    if (trimmed !== '' && !/^https?:\/\//i.test(trimmed)) {
+      return res.status(400).json({ error: 'astronomy_shop_url must start with http:// or https://' });
+    }
+    astronomyShopUrl = trimmed;
+  }
+  res.json({ splunk_org_id: splunkOrgId, astronomy_shop_url: astronomyShopUrl });
 });
 
 // 全問題取得（管理者ビュー、回答キーワード付き）
