@@ -222,6 +222,12 @@ fi
 
 NAMESPACE="otel-demo"
 
+# Generate unique OTel environment tag
+if [[ -z "$ENV_ID" ]]; then
+    ENV_ID=$(openssl rand -hex 3)
+fi
+OTEL_ENV="${CLUSTER_NAME}-${ENV_ID}"
+
 log_info "=== o11y Game Day Deployment ==="
 log_info "Cluster: ${CLUSTER_NAME}"
 log_info "Region: ${REGION}"
@@ -278,13 +284,6 @@ if [[ "$SKIP_COLLECTOR" != "true" ]]; then
         log_info "[DRY-RUN] Would install Splunk OTel Collector in splunk-monitoring namespace"
     fi
 fi
-
-# Generate unique OTel environment tag
-if [[ -z "$ENV_ID" ]]; then
-    ENV_ID=$(openssl rand -hex 3)
-fi
-OTEL_ENV="${CLUSTER_NAME}-${ENV_ID}"
-log_info "OTel environment tag: ${OTEL_ENV}"
 
 # Deploy application to single namespace
 log_step "Deploying application to namespace ${NAMESPACE}..."
