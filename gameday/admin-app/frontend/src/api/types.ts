@@ -31,7 +31,7 @@ export interface Question {
   question_id: string;
   flag_name: string;
   service: string;
-  trigger_type?: 'customer' | 'colleague' | 'alert';
+  trigger_type?: 'customer' | 'colleague' | 'alert' | 'challenge';
   difficulty?: 'normal' | 'hard';
   scenario?: string;
   question_text: string;

@@ -122,6 +122,11 @@ h1 {
   color: #ff8a80;
   border: 1px solid rgba(255,82,82,0.4);
 }
+.trigger-challenge {
+  background: rgba(255,215,0,0.2);
+  color: #ffd740;
+  border: 1px solid rgba(255,215,0,0.4);
+}
 .difficulty-badge {
   padding: 3px 10px;
   border-radius: 15px;

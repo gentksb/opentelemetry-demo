@@ -4,7 +4,7 @@ export interface Question {
   question_id: string;
   flag_name: string | 'none'; // 関連するFeature Flag。'none'はFeature Flagに依存しない設問。
   service: string;
-  trigger_type: 'customer' | 'colleague' | 'alert'; // シナリオの起点
+  trigger_type: 'customer' | 'colleague' | 'alert' | 'challenge'; // シナリオの起点。'challenge'はEaster Egg等の探索型設問。
   difficulty: 'normal' | 'hard'; // 難易度
   scenario: string; // SREロールプレイのシチュエーション説明
   question_text: string;
@@ -155,6 +155,54 @@ export const QUESTIONS: Question[] = [
     stage: 1,
     hint: 'APM > Overview で payment サービスを選択してください。サービス詳細の Tag Spotlight タブを開き、version タグを探してください。各バージョンのエラー率（Error Ratio）の違いを確認してください。',
     explanation: 'APM の Tag Spotlight で version タグを確認すると、v350.10 が高いエラー率を示しています。成功するリクエストは v350.9 を使用しますが、v350.10 では ButtercupPayments への認証トークンが無効なため HTTP 401 エラーが返されます。Tag Spotlight はどのディメンション（バージョン、リージョン、ユーザー等）でエラーが集中しているかを迅速に特定できる機能で、実際のインシデント対応ではロールバック対象バージョンの特定に活用できます。',
+  },
+
+  // Q8: ITSI + ThousandEyes - テスト実施拠点数の把握
+  {
+    question_id: 'q08-thousandeyes-agents',
+    flag_name: 'none',
+    service: 'thousandeyes',
+    trigger_type: 'colleague',
+    difficulty: 'normal',
+    scenario: 'NWチームが実施した変更によってサービスに影響が及んでいないかを確認したいようです。Online Shop に対して ThousandEyes で外形監視テストを実施しており、ITSI と連携しています。',
+    question_text: 'Online Shop に対して ThousandEyes の複数の拠点から定期的なテストを実施しています。テスト実施拠点はいくつ設定されていますか？',
+    answer_keywords: ['5'],
+    base_points: 100,
+    stage: 1,
+    hint: 'ITSI サービスアナライザーで、Online Shop サービスを見つけます。依存関係を持つ Network に関するサービスから、ThousandEyes のテストに関するエンティティを見つけてみましょう。',
+    explanation: 'ThousandEyes と Splunk のインテグレーションを実施し、Contents Pack を有効化すると、ThousandEyes に関するテストデータを ITSI に取り込むことができます。Entity からドリルダウンして ThousandEyes UI へのリンクも自動設定されます。',
+  },
+
+  // Q9: Easter Egg① - APM Tag Spotlight で隠されたメッセージを発見
+  {
+    question_id: 'q09-easter-egg-ask-ai',
+    flag_name: 'none',
+    service: 'openai',
+    trigger_type: 'challenge',
+    difficulty: 'hard',
+    scenario: 'Easter Egg を探そう①',
+    question_text: 'Easter Egg を探して。ある男がオンラインショップに迷い込んだ。朦朧としたまま、彼は焦点の合わない眼で商品ページを開いては閉じている。そして、何度も何度も、同じ言葉をキーボードに打ち込み続ける…。彼はどんな言葉を入力している？',
+    answer_keywords: ['Is this my Easter Egg?', 'is this my easter egg'],
+    base_points: 100,
+    stage: 1,
+    hint: '探しものは AI でも教えてくれない。',
+    explanation: 'オンラインショップの商品ページには Ask AI 機能が含まれています。そのため、APM Service Map 上にも "openai:astronomy-llm" というサービスが表示されており、上流の product-reviews サービスから OpenAI に対してリクエストが実施されています。このサービスに関連するトレースを分析すると、app.product.question という属性でユーザーが実行した質問が記録されています。この属性に関する MetricSets が設定されているため、Tag Spotlight を利用するとどんな質問が実施されたかを確認することができます。',
+  },
+
+  // Q10: Easter Egg② - ITSI 集約ポリシーに隠されたメッセージ
+  {
+    question_id: 'q10-easter-egg-itsi-comment',
+    flag_name: 'none',
+    service: 'itsi',
+    trigger_type: 'challenge',
+    difficulty: 'hard',
+    scenario: 'Easter Egg を探そう②',
+    question_text: 'Easter Egg は、テレメトリーの海をたゆたい、誰に見られることもなく、ひっそり水面から顔を出す。そして一言だけこう呟いた…。何と言った？',
+    answer_keywords: ['Happy Gameday', 'happy gameday'],
+    base_points: 100,
+    stage: 1,
+    hint: '実際の運用現場でこんなことをしたら、ふざけているのかと言われそうですが。',
+    explanation: 'ITSI の重要イベントの集約ポリシーでは、特定条件に該当した場合に実行したい操作をアクションルールとして定義することができます。アクションルールの一つとして、エピソードに対するコメントの追加が可能です。今回はゲームに関係のない、無視してよいエピソード（誰に見られることもないイベント）を集約するルールに対してコメントを追加しておきました。',
   },
 
 ];

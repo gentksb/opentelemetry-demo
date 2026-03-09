@@ -5,6 +5,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   customer: '顧客からの問い合わせ',
   colleague: '同僚からの相談',
   alert: 'システムアラート',
+  challenge: 'チャレンジ',
 };
 
 interface QuestionCardProps {
