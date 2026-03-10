@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { getElapsedMinutes } from '../utils/time';
 import {
   docClient,
   TABLES,
@@ -126,9 +127,7 @@ router.post('/game/reset', async (_req: Request, res: Response) => {
 
 // ゲーム状態取得（認証付きルート内にも配置。公開用は index.ts で別途定義）
 router.get('/game/state', (req: Request, res: Response) => {
-  const elapsedMinutes = gameStartedAt
-    ? (Date.now() - new Date(gameStartedAt).getTime()) / 60000
-    : 0;
+  const elapsedMinutes = getElapsedMinutes(gameStartedAt);
 
   res.json({
     state: gameState,

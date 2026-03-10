@@ -14,6 +14,7 @@ import {
   getTeamProgress,
 } from '../services/scoring';
 import { getGameState } from './admin';
+import { getElapsedMinutes } from '../utils/time';
 
 const router = Router();
 
@@ -58,9 +59,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     const team = teamResult.Item;
-    const startedAt = new Date(team.started_at);
-    const now = new Date();
-    const timeElapsedMinutes = (now.getTime() - startedAt.getTime()) / (1000 * 60);
+    const timeElapsedMinutes = getElapsedMinutes(team.started_at);
 
     // 既に正解済みかチェック
     const existingAnswer = await docClient.send(
@@ -96,7 +95,7 @@ router.post('/', async (req: Request, res: Response) => {
       is_correct: isCorrect,
       points_awarded: pointsAwarded,
       attempt_count: attemptCount,
-      answered_at: now.toISOString(),
+      answered_at: new Date().toISOString(),
       time_elapsed_minutes: Math.round(timeElapsedMinutes * 100) / 100,
     };
 

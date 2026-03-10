@@ -5,6 +5,11 @@ import { resolve } from 'path';
 export default defineConfig({
   plugins: [preact()],
   root: '.',
+  resolve: {
+    alias: {
+      '@gameday-shared': resolve(__dirname, '../src/constants'),
+    },
+  },
   build: {
     outDir: 'dist',
     rollupOptions: {

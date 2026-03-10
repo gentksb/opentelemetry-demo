@@ -1,5 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { QUESTIONS, getQuestion, getQuestionsForStage, getTeamProgress } from '../services/scoring';
+import { getGameStartedAt } from './admin';
+import { HINT_AVAILABLE_AFTER_MINUTES } from '../constants/game';
+import { getElapsedMinutes } from '../utils/time';
 
 const router = Router();
 
@@ -31,6 +34,9 @@ router.get('/', async (req: Request, res: Response) => {
 
     // Remove answer keywords for team view (security)
     // explanation is included only for answered questions
+    const elapsedMinutes = getElapsedMinutes(getGameStartedAt());
+    const hintsAvailable = elapsedMinutes >= HINT_AVAILABLE_AFTER_MINUTES;
+
     const sanitizedQuestions = questions.map((q) => {
       const answered = progress?.correctQuestions.includes(q.question_id) || false;
       return {
@@ -43,7 +49,7 @@ router.get('/', async (req: Request, res: Response) => {
         question_text: q.question_text,
         base_points: q.base_points,
         stage: q.stage,
-        hint: q.hint,
+        hint: hintsAvailable ? q.hint : undefined,
         answered,
         ...(answered && q.explanation ? { explanation: q.explanation } : {}),
       };

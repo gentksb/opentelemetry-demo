@@ -12,6 +12,7 @@ import answersRouter from './routes/answers';
 import adminRouter from './routes/admin';
 import questionsRouter from './routes/questions';
 import { getGameState, getGameStartedAt, getSplunkOrgId, getAstronomyShopUrl, getOtelEnv } from './routes/admin';
+import { getElapsedMinutes } from './utils/time';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -49,9 +50,7 @@ const adminAuth = (req: express.Request, res: express.Response, next: express.Ne
 app.get('/api/game/state', (req, res) => {
   const state = getGameState();
   const startedAt = getGameStartedAt();
-  const elapsedMinutes = startedAt
-    ? (Date.now() - new Date(startedAt).getTime()) / 60000
-    : 0;
+  const elapsedMinutes = getElapsedMinutes(startedAt);
   res.json({
     state,
     started_at: startedAt,

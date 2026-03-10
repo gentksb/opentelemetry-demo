@@ -1,4 +1,5 @@
 import { docClient, TABLES, GetCommand, QueryCommand, UpdateCommand } from './dynamodb';
+import { GAME_DURATION_MINUTES } from '../constants/game';
 
 export interface Question {
   question_id: string;
@@ -215,8 +216,8 @@ export function calculateScore(
   timeElapsedMinutes: number,
   attemptCount: number
 ): number {
-  // Time decay: 0.5% reduction per minute (max 50% reduction)
-  const timeDecay = Math.min(0.5, timeElapsedMinutes * 0.005);
+  // Time decay: scale to 50% reduction over the full game duration
+  const timeDecay = Math.min(0.5, (timeElapsedMinutes / GAME_DURATION_MINUTES) * 0.5);
 
   // Wrong answer penalty: 5 points per wrong attempt
   const wrongAttemptPenalty = (attemptCount - 1) * 5;

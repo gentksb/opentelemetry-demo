@@ -1,4 +1,5 @@
 import type { GameState } from '../../api/types';
+import { GAME_DURATION_MINUTES } from '@gameday-shared/game';
 
 interface GameStatusBannerProps {
   gameState: GameState | undefined;
@@ -9,7 +10,7 @@ export function GameStatusBanner({ gameState }: GameStatusBannerProps) {
 
   const messages: Record<string, string> = {
     waiting: 'ゲーム開始を待っています...',
-    active: `ゲーム進行中（経過: ${Math.floor(gameState.elapsed_minutes)}分）`,
+    active: `ゲーム進行中（経過: ${Math.floor(gameState.elapsed_minutes)}分 / ${GAME_DURATION_MINUTES}分）`,
     finished: 'ゲームは終了しました',
   };
 

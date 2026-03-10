@@ -13,8 +13,9 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "paths": {
       "react": ["./node_modules/preact/compat/"],
-      "react-dom": ["./node_modules/preact/compat/"]
+      "react-dom": ["./node_modules/preact/compat/"],
+      "@gameday-shared/*": ["../src/constants/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../src/constants"]
 }

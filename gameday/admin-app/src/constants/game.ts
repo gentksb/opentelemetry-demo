@@ -1,0 +1,2 @@
+export const GAME_DURATION_MINUTES = 45;
+export const HINT_AVAILABLE_AFTER_MINUTES = 30;
