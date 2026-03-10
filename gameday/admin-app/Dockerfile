@@ -6,6 +6,7 @@ COPY frontend/package*.json ./
 RUN npm ci
 
 COPY frontend/ ./
+COPY src/constants /app/src/constants
 
 ARG SPLUNK_RUM_TOKEN=""
 ARG SPLUNK_REALM="jp0"
