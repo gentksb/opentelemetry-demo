@@ -18,6 +18,9 @@ export function RulesPanel() {
         <li>
           正解時の最低得点は <strong>10点</strong> です
         </li>
+        <li>
+          解答チェック時に、大文字小文字は区別されません。前後のホワイトスペースは無視されます。
+        </li>
       </ul>
     </details>
   );
