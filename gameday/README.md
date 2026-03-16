@@ -2,6 +2,8 @@
 
 OpenTelemetry DemoにFeature Flagsで障害を注入し、Splunk APM/Infrastructureで原因を特定するチャレンジゲーム。
 
+![構成図](./docs/gameday-aws-architecture.drawio.png)
+
 ## 前提条件
 
 - AWS CLI（設定済み）
