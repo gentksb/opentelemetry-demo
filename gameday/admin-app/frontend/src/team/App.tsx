@@ -8,6 +8,7 @@ import { LoginForm } from '../components/team/LoginForm';
 import { GameStatusBanner } from '../components/team/GameStatusBanner';
 import { ScenarioBanner } from '../components/team/ScenarioBanner';
 import { O11yLinks } from '../components/team/O11yLinks';
+import { ItsiLinks } from '../components/team/ItsiLinks';
 import { RulesPanel } from '../components/team/RulesPanel';
 import { TeamInfo } from '../components/team/TeamInfo';
 import { ProgressSummary } from '../components/team/ProgressSummary';
@@ -36,6 +37,9 @@ export function App() {
   const astronomyShopUrl = config?.astronomy_shop_url;
   // otel_env が設定されていればそれを使用。未設定時は空文字（O11yLinks 側で警告表示）
   const otelEnv = config?.otel_env || '';
+  const itsiUrl = config?.itsi_url;
+  const itsiUsername = config?.itsi_username;
+  const itsiPassword = config?.itsi_password;
 
   const { data: gameState } = useGameState(isLoggedIn);
   const {
@@ -90,6 +94,7 @@ export function App() {
       <ScenarioBanner astronomyShopUrl={astronomyShopUrl} />
 
       {config !== undefined && <O11yLinks envName={otelEnv} splunkRealm={splunkRealm} orgId={orgId} />}
+      {config !== undefined && <ItsiLinks itsiUrl={itsiUrl} itsiUsername={itsiUsername} itsiPassword={itsiPassword} />}
 
       <RulesPanel />
 

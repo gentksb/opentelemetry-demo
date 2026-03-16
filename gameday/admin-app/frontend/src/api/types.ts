@@ -12,6 +12,9 @@ export interface Config {
   splunk_org_id?: string;
   astronomy_shop_url?: string;
   otel_env?: string; // deployment.environment タグ値。管理者が設定。未設定時は空文字。
+  itsi_url?: string;
+  itsi_username?: string;
+  itsi_password?: string;
 }
 
 // チーム情報

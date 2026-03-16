@@ -107,6 +107,14 @@ export function useAdminData({ token, onAuthRequired }: UseAdminDataOptions) {
     });
   }, [token]);
 
+  const updateItsiConfig = useCallback(async (url: string, username: string, password: string) => {
+    await authFetch(token ?? '', '/api/admin/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itsi_url: url, itsi_username: username, itsi_password: password }),
+    });
+  }, [token]);
+
   return {
     scoreboard,
     stats,
@@ -122,5 +130,6 @@ export function useAdminData({ token, onAuthRequired }: UseAdminDataOptions) {
     updateOrgId,
     updateAstronomyShopUrl,
     updateOtelEnv,
+    updateItsiConfig,
   };
 }

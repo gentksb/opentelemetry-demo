@@ -11,7 +11,7 @@ import teamsRouter from './routes/teams';
 import answersRouter from './routes/answers';
 import adminRouter from './routes/admin';
 import questionsRouter from './routes/questions';
-import { getGameState, getGameStartedAt, getSplunkOrgId, getAstronomyShopUrl, getOtelEnv } from './routes/admin';
+import { getGameState, getGameStartedAt, getSplunkOrgId, getAstronomyShopUrl, getOtelEnv, getItsiUrl, getItsiUsername, getItsiPassword } from './routes/admin';
 import { getElapsedMinutes } from './utils/time';
 
 const app = express();
@@ -87,6 +87,9 @@ app.get('/api/config', (req, res) => {
     splunk_org_id: getSplunkOrgId(),
     astronomy_shop_url: getAstronomyShopUrl(),
     otel_env: getOtelEnv(),
+    itsi_url: getItsiUrl(),
+    itsi_username: getItsiUsername(),
+    itsi_password: getItsiPassword(),
   });
 });
 

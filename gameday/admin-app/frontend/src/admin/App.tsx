@@ -30,6 +30,7 @@ export function App() {
     updateOrgId,
     updateAstronomyShopUrl,
     updateOtelEnv,
+    updateItsiConfig,
   } = useAdminData({ token: adminToken, onAuthRequired });
 
   const handleLogin = (token: string) => {
@@ -90,6 +91,21 @@ export function App() {
       setTimeout(() => setShopUrlMessage(''), 3000);
     } catch {
       setShopUrlMessage('更新に失敗しました');
+    }
+  };
+
+  const [itsiUrlInput, setItsiUrlInput] = useState('');
+  const [itsiUsernameInput, setItsiUsernameInput] = useState('');
+  const [itsiPasswordInput, setItsiPasswordInput] = useState('');
+  const [itsiMessage, setItsiMessage] = useState('');
+
+  const handleUpdateItsiConfig = async () => {
+    try {
+      await updateItsiConfig(itsiUrlInput, itsiUsernameInput, itsiPasswordInput);
+      setItsiMessage('ITSI 設定を更新しました');
+      setTimeout(() => setItsiMessage(''), 3000);
+    } catch {
+      setItsiMessage('更新に失敗しました');
     }
   };
 
@@ -181,6 +197,46 @@ export function App() {
           </div>
           <small style="color:rgba(255,255,255,0.45);margin-top:0.4rem;display:block;">
             チーム画面のゲームシナリオ「Astronomy Shop」にリンクとして表示されます。
+          </small>
+        </section>
+
+        <section style="margin-bottom:1.5rem;padding:1rem;background:rgba(255,255,255,0.05);border-radius:8px;">
+          <h2 style="margin:0 0 0.75rem;font-size:1rem;color:rgba(255,255,255,0.7);">ITSI 設定</h2>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+              <input
+                type="url"
+                placeholder="ITSI URL 例: https://itsi.example.com"
+                value={itsiUrlInput}
+                onInput={(e) => setItsiUrlInput((e.target as HTMLInputElement).value)}
+                style="flex:1;min-width:200px;padding:0.5rem 0.75rem;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#fff;font-size:0.9rem;"
+              />
+            </div>
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+              <input
+                type="text"
+                placeholder="共有ユーザー名"
+                value={itsiUsernameInput}
+                onInput={(e) => setItsiUsernameInput((e.target as HTMLInputElement).value)}
+                style="flex:1;min-width:150px;padding:0.5rem 0.75rem;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#fff;font-size:0.9rem;"
+              />
+              <input
+                type="text"
+                placeholder="共有パスワード"
+                value={itsiPasswordInput}
+                onInput={(e) => setItsiPasswordInput((e.target as HTMLInputElement).value)}
+                style="flex:1;min-width:150px;padding:0.5rem 0.75rem;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#fff;font-size:0.9rem;"
+              />
+              <button type="button" class="action-btn" onClick={handleUpdateItsiConfig}>
+                保存
+              </button>
+              {itsiMessage && (
+                <span style="color:#00ff88;font-size:0.85rem;">{itsiMessage}</span>
+              )}
+            </div>
+          </div>
+          <small style="color:rgba(255,255,255,0.45);margin-top:0.4rem;display:block;">
+            全チーム共通の ITSI 接続情報です。チーム画面にリンクと認証情報が表示されます。
           </small>
         </section>
 

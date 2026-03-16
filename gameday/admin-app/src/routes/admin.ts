@@ -26,6 +26,11 @@ let astronomyShopUrl: string = '';
 // deploy-teams.sh で生成された OTEL_ENV (例: gameday-kind-3f2a1b) を設定する。
 let otelEnv: string = '';
 
+// ITSI 接続情報（全チーム共通。イベントごとに管理者が設定。インメモリ）
+let itsiUrl: string = '';
+let itsiUsername: string = '';
+let itsiPassword: string = '';
+
 // ゲーム状態を外部から取得するためのエクスポート関数
 export function getGameState(): 'waiting' | 'active' | 'finished' {
   return gameState;
@@ -45,6 +50,18 @@ export function getAstronomyShopUrl(): string {
 
 export function getOtelEnv(): string {
   return otelEnv;
+}
+
+export function getItsiUrl(): string {
+  return itsiUrl;
+}
+
+export function getItsiUsername(): string {
+  return itsiUsername;
+}
+
+export function getItsiPassword(): string {
+  return itsiPassword;
 }
 
 // ゲーム開始 - 全チームの started_at を現在時刻にリセットし、一斉スタートとする
@@ -302,11 +319,18 @@ router.post('/recalculate-scores', async (req: Request, res: Response) => {
 
 // 設定取得・更新（管理者専用）
 router.get('/config', (req: Request, res: Response) => {
-  res.json({ splunk_org_id: splunkOrgId, astronomy_shop_url: astronomyShopUrl, otel_env: otelEnv });
+  res.json({
+    splunk_org_id: splunkOrgId,
+    astronomy_shop_url: astronomyShopUrl,
+    otel_env: otelEnv,
+    itsi_url: itsiUrl,
+    itsi_username: itsiUsername,
+    itsi_password: itsiPassword,
+  });
 });
 
 router.put('/config', (req: Request, res: Response) => {
-  const { org_id, astronomy_shop_url, otel_env } = req.body;
+  const { org_id, astronomy_shop_url, otel_env, itsi_url, itsi_username, itsi_password } = req.body;
   if (org_id !== undefined) {
     if (typeof org_id !== 'string') {
       return res.status(400).json({ error: 'org_id must be a string' });
@@ -329,7 +353,36 @@ router.put('/config', (req: Request, res: Response) => {
     }
     otelEnv = otel_env.trim();
   }
-  res.json({ splunk_org_id: splunkOrgId, astronomy_shop_url: astronomyShopUrl, otel_env: otelEnv });
+  if (itsi_url !== undefined) {
+    if (typeof itsi_url !== 'string') {
+      return res.status(400).json({ error: 'itsi_url must be a string' });
+    }
+    const trimmed = itsi_url.trim();
+    if (trimmed !== '' && !/^https?:\/\//i.test(trimmed)) {
+      return res.status(400).json({ error: 'itsi_url must start with http:// or https://' });
+    }
+    itsiUrl = trimmed;
+  }
+  if (itsi_username !== undefined) {
+    if (typeof itsi_username !== 'string') {
+      return res.status(400).json({ error: 'itsi_username must be a string' });
+    }
+    itsiUsername = itsi_username.trim();
+  }
+  if (itsi_password !== undefined) {
+    if (typeof itsi_password !== 'string') {
+      return res.status(400).json({ error: 'itsi_password must be a string' });
+    }
+    itsiPassword = itsi_password.trim();
+  }
+  res.json({
+    splunk_org_id: splunkOrgId,
+    astronomy_shop_url: astronomyShopUrl,
+    otel_env: otelEnv,
+    itsi_url: itsiUrl,
+    itsi_username: itsiUsername,
+    itsi_password: itsiPassword,
+  });
 });
 
 // 全問題取得（管理者ビュー、回答キーワード付き）
