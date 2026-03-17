@@ -12,11 +12,10 @@ export function O11yLinks({ envName, splunkRealm, orgId }: O11yLinksProps) {
     return (
       <details class="o11y-links">
         <summary>Splunk Observability Cloud リンク</summary>
-        <div style="margin:10px 0;padding:12px 16px;background:rgba(255,165,0,0.12);border:1px solid rgba(255,165,0,0.4);border-radius:5px;">
-          <strong style="color:#ffa500;">⚠ 環境名が設定されていません</strong>
-          <br />
-          <small style="color:rgba(255,255,255,0.7);">
-            管理者に OTel Environment の設定を依頼してください。設定後にリンクが利用可能になります。
+        <div class="environment-warning">
+          <strong>環境名がまだ設定されていません</strong>
+          <small>
+            管理者に OTel Environment の設定状況を確認してください。設定完了後にこのパネルから各リンクを開けます。
           </small>
         </div>
       </details>
@@ -38,11 +37,11 @@ export function O11yLinks({ envName, splunkRealm, orgId }: O11yLinksProps) {
   return (
     <details class="o11y-links">
       <summary>Splunk Observability Cloud リンク</summary>
-      <div style="margin:10px 0;padding:10px;background:rgba(0,212,255,0.1);border-radius:5px;">
-        あなたのEnvironment: <code style="color:#00ff88;font-size:1.1rem;">{envName}</code>
-        <br />
-        <small style="color:rgba(255,255,255,0.6);">
-          APMやInfrastructure Monitoringでこの値でフィルタしてください
+      <div class="environment-card">
+        <div class="environment-label">あなたの Environment</div>
+        <code class="environment-value">{envName}</code>
+        <small class="environment-note">
+          APM と Infrastructure Monitoring では、この値でフィルタすると自分たちの環境を追いやすくなります。
         </small>
       </div>
       <ul>
@@ -50,16 +49,19 @@ export function O11yLinks({ envName, splunkRealm, orgId }: O11yLinksProps) {
           <a href={apmUrl} target="_blank" rel="noopener noreferrer">
             APM - サービスマップ &amp; トレース
           </a>
+          <span class="link-description">障害の起点になっているサービスや遅いトレースを確認します。</span>
         </li>
         <li>
           <a href={imUrl} target="_blank" rel="noopener noreferrer">
             Infrastructure Monitoring
           </a>
+          <span class="link-description">Kubernetes やホスト側の異常、リソース逼迫を確認します。</span>
         </li>
         <li>
           <a href={rumUrl} target="_blank" rel="noopener noreferrer">
             RUM - エンドユーザーのブラウザ体験・ネットワーク遅延
           </a>
+          <span class="link-description">ブラウザ視点の体感遅延やフロントエンドの問題を確認します。</span>
         </li>
       </ul>
     </details>

@@ -26,9 +26,9 @@ export function LoginForm({ onLogin }: LoginFormProps) {
       onLogin(id);
     } catch (e) {
       if (e instanceof ApiError) {
-        setError('チームが見つかりません');
+        setError('チームIDが見つかりません。運営から共有されたチームIDを再確認してください。');
       } else {
-        setError('エラーが発生しました');
+        setError('ログイン確認中にエラーが発生しました。少し待ってから再試行してください。');
       }
     } finally {
       setLoading(false);
@@ -44,15 +44,25 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   return (
     <div class="login-form">
       <h2>チームログイン</h2>
+      <p class="login-help">
+        運営から配布されたチームIDを入力してログインしてください。
+      </p>
       {error && <div class="error-message">{error}</div>}
       <input
         type="text"
         placeholder="チームID（例: team-01）"
         value={teamId}
         autocomplete="organization"
-        onInput={(e) => setTeamId((e.target as HTMLInputElement).value)}
+        disabled={loading}
+        onInput={(e) => {
+          setTeamId((e.target as HTMLInputElement).value);
+          if (error) setError('');
+        }}
         onKeyPress={handleKeyPress}
       />
+      <div class="login-status" aria-live="polite">
+        {loading ? 'チーム情報を確認しています...' : 'Enter キーでもログインできます'}
+      </div>
       <button type="button" onClick={handleLogin} disabled={loading}>
         {loading ? 'ログイン中...' : 'ログイン'}
       </button>

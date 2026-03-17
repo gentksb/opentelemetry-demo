@@ -35,10 +35,14 @@ export function QuestionCard({
   const incorrect = incorrectCache[question.question_id];
   const triggerLabel = question.trigger_type ? TRIGGER_LABELS[question.trigger_type] : undefined;
   const isHard = question.difficulty === 'hard';
+  const isGameActive = gameState === 'active';
+  const inactiveMessage = gameState === 'finished'
+    ? '回答受付は終了しました。結果や解説を確認してください。'
+    : 'ゲーム開始待ちです。開始後に回答を送信できます。';
 
   const handleSubmit = async () => {
-    if (gameState !== 'active') {
-      setLocalError('ゲームが開始されていません。運営の開始を待ってください。');
+    if (!isGameActive) {
+      setLocalError(inactiveMessage);
       return;
     }
 
@@ -64,7 +68,7 @@ export function QuestionCard({
   };
 
   const handleKeyPress = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && isGameActive) {
       handleSubmit();
     }
   };
@@ -91,7 +95,10 @@ export function QuestionCard({
           <p>{question.question_text}</p>
         </div>
         <div class="result-message correct">
-          正解済み ✓{pointsCache[question.question_id] !== undefined ? ` +${pointsCache[question.question_id]}点` : ''}
+          <strong>正解済み</strong>
+          {pointsCache[question.question_id] !== undefined
+            ? ` +${pointsCache[question.question_id]}点獲得`
+            : ` ${question.base_points}点`}
         </div>
         {explanation && <div class="explanation-box">{explanation}</div>}
       </div>
@@ -115,12 +122,14 @@ export function QuestionCard({
         <p>{question.question_text}</p>
       </div>
       {question.hint && <div class="hint-text">{question.hint}</div>}
+      {!isGameActive && <div class="answer-state-note">{inactiveMessage}</div>}
       <div class="answer-form">
         <input
           type="text"
           class="answer-input"
-          placeholder="回答を入力..."
+          placeholder={isGameActive ? '回答を入力...' : 'ゲーム開始後に入力できます'}
           value={answer}
+          disabled={!isGameActive || submitting}
           onInput={(e) => setAnswer((e.target as HTMLInputElement).value)}
           onKeyPress={handleKeyPress}
         />
@@ -128,14 +137,16 @@ export function QuestionCard({
           type="button"
           class="submit-btn"
           onClick={handleSubmit}
-          disabled={submitting}
+          disabled={!isGameActive || submitting}
         >
-          {submitting ? '送信中...' : '送信'}
+          {submitting ? '送信中...' : isGameActive ? '送信' : '開始待ち'}
         </button>
       </div>
       {localError && <div class="result-message incorrect">{localError}</div>}
       {!localError && incorrect && (
-        <div class="result-message incorrect">{incorrect.message}</div>
+        <div class="result-message incorrect">
+          <strong>不正解</strong> {incorrect.message} 再回答は可能ですが、誤答ごとにペナルティがあります。
+        </div>
       )}
     </div>
   );
