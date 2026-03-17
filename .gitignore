@@ -90,3 +90,8 @@ kubernetes/secrets.yaml
 .playwright-cli/
 .playwright-cli/**/*
 .env
+
+# Codex Temporaly Review
+AGENTS.md
+.agents/
+.agents/**/*
