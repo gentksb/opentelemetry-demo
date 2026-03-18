@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Hono } from 'hono';
 import { getElapsedMinutes } from '../utils/time';
 import {
   docClient,
@@ -9,71 +9,20 @@ import {
   DeleteCommand,
 } from '../services/dynamodb';
 import { QUESTIONS, getTeamProgress, updateTeamScore } from '../services/scoring';
+import { getSettings, updateSettings } from '../services/settings';
 
-const router = Router();
-
-// ゲーム状態管理（インメモリ。サーバー再起動でリセットされる）
-let gameState: 'waiting' | 'active' | 'finished' = 'waiting';
-let gameStartedAt: string | null = null;
-
-// Splunk Org ID（イベントごとに管理者が設定。インメモリ）
-let splunkOrgId: string = '';
-
-// Astronomy Shop URL（イベントごとに管理者が設定。インメモリ）
-let astronomyShopUrl: string = '';
-
-// OTel deployment.environment タグ値（イベントごとに管理者が設定。インメモリ）
-// deploy-teams.sh で生成された OTEL_ENV (例: gameday-kind-3f2a1b) を設定する。
-let otelEnv: string = '';
-
-// ITSI 接続情報（全チーム共通。イベントごとに管理者が設定。インメモリ）
-let itsiUrl: string = '';
-let itsiUsername: string = '';
-let itsiPassword: string = '';
-
-// ゲーム状態を外部から取得するためのエクスポート関数
-export function getGameState(): 'waiting' | 'active' | 'finished' {
-  return gameState;
-}
-
-export function getGameStartedAt(): string | null {
-  return gameStartedAt;
-}
-
-export function getSplunkOrgId(): string {
-  return splunkOrgId;
-}
-
-export function getAstronomyShopUrl(): string {
-  return astronomyShopUrl;
-}
-
-export function getOtelEnv(): string {
-  return otelEnv;
-}
-
-export function getItsiUrl(): string {
-  return itsiUrl;
-}
-
-export function getItsiUsername(): string {
-  return itsiUsername;
-}
-
-export function getItsiPassword(): string {
-  return itsiPassword;
-}
+const router = new Hono();
 
 // ゲーム開始 - 全チームの started_at を現在時刻にリセットし、一斉スタートとする
-router.post('/game/start', async (req: Request, res: Response) => {
+router.post('/game/start', async (c) => {
   try {
-    if (gameState === 'active') {
-      return res.status(400).json({ error: 'ゲームは既に開始されています' });
+    const current = await getSettings();
+    if (current.game_state === 'active') {
+      return c.json({ error: 'ゲームは既に開始されています' }, 400);
     }
 
     const now = new Date().toISOString();
-    gameState = 'active';
-    gameStartedAt = now;
+    await updateSettings({ game_state: 'active', game_started_at: now });
 
     // 全チームの started_at を現在時刻にリセット（一斉スタート）
     const teamsResult = await docClient.send(
@@ -94,67 +43,74 @@ router.post('/game/start', async (req: Request, res: Response) => {
       );
     }
 
-    res.json({
+    return c.json({
       message: 'ゲームを開始しました',
-      state: gameState,
-      started_at: gameStartedAt,
+      state: 'active',
+      started_at: now,
       teams_reset: teams.length,
     });
   } catch (error) {
     console.error('Error starting game:', error);
-    res.status(500).json({ error: 'ゲームの開始に失敗しました' });
+    return c.json({ error: 'ゲームの開始に失敗しました' }, 500);
   }
 });
 
 // ゲーム停止 - 状態を 'finished' に変更
-router.post('/game/stop', async (_req: Request, res: Response) => {
+router.post('/game/stop', async (c) => {
   try {
-    if (gameState !== 'active') {
-      return res.status(400).json({ error: 'ゲームは現在アクティブではありません' });
+    const current = await getSettings();
+    if (current.game_state !== 'active') {
+      return c.json({ error: 'ゲームは現在アクティブではありません' }, 400);
     }
 
-    gameState = 'finished';
+    await updateSettings({ game_state: 'finished' });
 
-    res.json({
+    return c.json({
       message: 'ゲームを終了しました',
-      state: gameState,
-      started_at: gameStartedAt,
+      state: 'finished',
+      started_at: current.game_started_at,
     });
   } catch (error) {
     console.error('Error stopping game:', error);
-    res.status(500).json({ error: 'ゲームの停止に失敗しました' });
+    return c.json({ error: 'ゲームの停止に失敗しました' }, 500);
   }
 });
 
 // ゲームリセット - 状態を 'waiting' に戻す
-router.post('/game/reset', async (_req: Request, res: Response) => {
+router.post('/game/reset', async (c) => {
   try {
-    gameState = 'waiting';
-    gameStartedAt = null;
+    await updateSettings({ game_state: 'waiting', game_started_at: null });
 
-    res.json({
+    return c.json({
       message: 'ゲーム状態をリセットしました',
-      state: gameState,
+      state: 'waiting',
     });
   } catch (error) {
     console.error('Error resetting game:', error);
-    res.status(500).json({ error: 'ゲームのリセットに失敗しました' });
+    return c.json({ error: 'ゲームのリセットに失敗しました' }, 500);
   }
 });
 
-// ゲーム状態取得（認証付きルート内にも配置。公開用は index.ts で別途定義）
-router.get('/game/state', (req: Request, res: Response) => {
-  const elapsedMinutes = getElapsedMinutes(gameStartedAt);
+// ゲーム状態取得（認証付きルート内にも配置。公開用は app.ts で別途定義）
+router.get('/game/state', async (c) => {
+  try {
+    const settings = await getSettings();
+    const startedAt = settings.game_started_at || null;
+    const elapsedMinutes = getElapsedMinutes(startedAt);
 
-  res.json({
-    state: gameState,
-    started_at: gameStartedAt,
-    elapsed_minutes: Math.round(elapsedMinutes * 100) / 100,
-  });
+    return c.json({
+      state: settings.game_state,
+      started_at: startedAt,
+      elapsed_minutes: Math.round(elapsedMinutes * 100) / 100,
+    });
+  } catch (error) {
+    console.error('Error getting game state:', error);
+    return c.json({ error: 'Failed to get game state' }, 500);
+  }
 });
 
 // スコアボード取得（全チームをスコア順にソート）
-router.get('/scoreboard', async (req: Request, res: Response) => {
+router.get('/scoreboard', async (c) => {
   try {
     const result = await docClient.send(
       new ScanCommand({
@@ -171,16 +127,14 @@ router.get('/scoreboard', async (req: Request, res: Response) => {
       last_activity: team.last_activity,
     }));
 
-    // スコア降順でソート
     teams.sort((a, b) => b.total_score - a.total_score);
 
-    // ランクを付与
     const rankedTeams = teams.map((team, index) => ({
       rank: index + 1,
       ...team,
     }));
 
-    res.json({
+    return c.json({
       teams: rankedTeams,
       total_teams: rankedTeams.length,
       total_questions: QUESTIONS.length,
@@ -188,19 +142,17 @@ router.get('/scoreboard', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error getting scoreboard:', error);
-    res.status(500).json({ error: 'Failed to get scoreboard' });
+    return c.json({ error: 'Failed to get scoreboard' }, 500);
   }
 });
 
 // チーム詳細進捗取得（管理者ビュー）
-router.get('/teams/:teamId/detail', async (req: Request, res: Response) => {
+router.get('/teams/:teamId/detail', async (c) => {
   try {
-    const { teamId } = req.params;
+    const teamId = c.req.param('teamId');
 
-    // チーム情報と進捗を取得
     const progress = await getTeamProgress(teamId);
 
-    // 全回答を取得
     const answersResult = await docClient.send(
       new QueryCommand({
         TableName: TABLES.ANSWERS,
@@ -211,7 +163,6 @@ router.get('/teams/:teamId/detail', async (req: Request, res: Response) => {
       })
     );
 
-    // 各問題に回答をマッピング
     const questionDetails = QUESTIONS.map((q) => {
       const answer = (answersResult.Items || []).find(
         (a) => a.question_id === q.question_id
@@ -223,7 +174,7 @@ router.get('/teams/:teamId/detail', async (req: Request, res: Response) => {
         question_text: q.question_text,
         base_points: q.base_points,
         stage: q.stage,
-        answer_keywords: q.answer_keywords, // 管理者にはキーワードを表示
+        answer_keywords: q.answer_keywords,
         answered: !!answer,
         is_correct: answer?.is_correct || false,
         points_awarded: answer?.points_awarded || 0,
@@ -233,23 +184,22 @@ router.get('/teams/:teamId/detail', async (req: Request, res: Response) => {
       };
     });
 
-    res.json({
+    return c.json({
       team_id: teamId,
       progress,
       questions: questionDetails,
     });
   } catch (error) {
     console.error('Error getting team detail:', error);
-    res.status(500).json({ error: 'Failed to get team detail' });
+    return c.json({ error: 'Failed to get team detail' }, 500);
   }
 });
 
 // チーム進捗リセット
-router.post('/teams/:teamId/reset', async (req: Request, res: Response) => {
+router.post('/teams/:teamId/reset', async (c) => {
   try {
-    const { teamId } = req.params;
+    const teamId = c.req.param('teamId');
 
-    // チームスコアをリセット
     await docClient.send(
       new UpdateCommand({
         TableName: TABLES.TEAMS,
@@ -264,7 +214,6 @@ router.post('/teams/:teamId/reset', async (req: Request, res: Response) => {
       })
     );
 
-    // 回答レコードも削除（完全リセット）
     const answersResult = await docClient.send(
       new QueryCommand({
         TableName: TABLES.ANSWERS,
@@ -282,17 +231,16 @@ router.post('/teams/:teamId/reset', async (req: Request, res: Response) => {
       );
     }
 
-    res.json({ message: 'Team progress reset', deleted_answers: answers.length });
+    return c.json({ message: 'Team progress reset', deleted_answers: answers.length });
   } catch (error) {
     console.error('Error resetting team:', error);
-    res.status(500).json({ error: 'Failed to reset team' });
+    return c.json({ error: 'Failed to reset team' }, 500);
   }
 });
 
 // 全チームスコア再計算
-router.post('/recalculate-scores', async (req: Request, res: Response) => {
+router.post('/recalculate-scores', async (c) => {
   try {
-    // 全チームを取得
     const teamsResult = await docClient.send(
       new ScanCommand({
         TableName: TABLES.TEAMS,
@@ -307,98 +255,123 @@ router.post('/recalculate-scores', async (req: Request, res: Response) => {
       results.push(team.team_id);
     }
 
-    res.json({
+    return c.json({
       message: 'Scores recalculated',
       teams_updated: results.length,
     });
   } catch (error) {
     console.error('Error recalculating scores:', error);
-    res.status(500).json({ error: 'Failed to recalculate scores' });
+    return c.json({ error: 'Failed to recalculate scores' }, 500);
   }
 });
 
-// 設定取得・更新（管理者専用）
-router.get('/config', (req: Request, res: Response) => {
-  res.json({
-    splunk_org_id: splunkOrgId,
-    astronomy_shop_url: astronomyShopUrl,
-    otel_env: otelEnv,
-    itsi_url: itsiUrl,
-    itsi_username: itsiUsername,
-    itsi_password: itsiPassword,
-  });
+// 設定取得（管理者専用）
+router.get('/config', async (c) => {
+  try {
+    const settings = await getSettings();
+    return c.json({
+      splunk_org_id: settings.splunk_org_id,
+      astronomy_shop_url: settings.astronomy_shop_url,
+      otel_env: settings.otel_env,
+      itsi_url: settings.itsi_url,
+      itsi_username: settings.itsi_username,
+      itsi_password: settings.itsi_password,
+    });
+  } catch (error) {
+    console.error('Error getting config:', error);
+    return c.json({ error: 'Failed to get config' }, 500);
+  }
 });
 
-router.put('/config', (req: Request, res: Response) => {
-  const { org_id, astronomy_shop_url, otel_env, itsi_url, itsi_username, itsi_password } = req.body;
-  if (org_id !== undefined) {
-    if (typeof org_id !== 'string') {
-      return res.status(400).json({ error: 'org_id must be a string' });
+// 設定更新（管理者専用）
+router.put('/config', async (c) => {
+  try {
+    const { org_id, astronomy_shop_url, otel_env, itsi_url, itsi_username, itsi_password } =
+      await c.req.json<{
+        org_id?: string;
+        astronomy_shop_url?: string;
+        otel_env?: string;
+        itsi_url?: string;
+        itsi_username?: string;
+        itsi_password?: string;
+      }>();
+    const partial: Partial<import('../services/settings').GameSettings> = {};
+
+    if (org_id !== undefined) {
+      if (typeof org_id !== 'string') {
+        return c.json({ error: 'org_id must be a string' }, 400);
+      }
+      partial.splunk_org_id = org_id.trim();
     }
-    splunkOrgId = org_id.trim();
+    if (astronomy_shop_url !== undefined) {
+      if (typeof astronomy_shop_url !== 'string') {
+        return c.json({ error: 'astronomy_shop_url must be a string' }, 400);
+      }
+      const trimmed = astronomy_shop_url.trim();
+      if (trimmed !== '' && !/^https?:\/\//i.test(trimmed)) {
+        return c.json({ error: 'astronomy_shop_url must start with http:// or https://' }, 400);
+      }
+      partial.astronomy_shop_url = trimmed;
+    }
+    if (otel_env !== undefined) {
+      if (typeof otel_env !== 'string') {
+        return c.json({ error: 'otel_env must be a string' }, 400);
+      }
+      partial.otel_env = otel_env.trim();
+    }
+    if (itsi_url !== undefined) {
+      if (typeof itsi_url !== 'string') {
+        return c.json({ error: 'itsi_url must be a string' }, 400);
+      }
+      const trimmed = itsi_url.trim();
+      if (trimmed !== '' && !/^https?:\/\//i.test(trimmed)) {
+        return c.json({ error: 'itsi_url must start with http:// or https://' }, 400);
+      }
+      partial.itsi_url = trimmed;
+    }
+    if (itsi_username !== undefined) {
+      if (typeof itsi_username !== 'string') {
+        return c.json({ error: 'itsi_username must be a string' }, 400);
+      }
+      partial.itsi_username = itsi_username.trim();
+    }
+    if (itsi_password !== undefined) {
+      if (typeof itsi_password !== 'string') {
+        return c.json({ error: 'itsi_password must be a string' }, 400);
+      }
+      partial.itsi_password = itsi_password.trim();
+    }
+
+    await updateSettings(partial);
+    const updated = await getSettings();
+
+    return c.json({
+      splunk_org_id: updated.splunk_org_id,
+      astronomy_shop_url: updated.astronomy_shop_url,
+      otel_env: updated.otel_env,
+      itsi_url: updated.itsi_url,
+      itsi_username: updated.itsi_username,
+      itsi_password: updated.itsi_password,
+    });
+  } catch (error) {
+    console.error('Error updating config:', error);
+    return c.json({ error: 'Failed to update config' }, 500);
   }
-  if (astronomy_shop_url !== undefined) {
-    if (typeof astronomy_shop_url !== 'string') {
-      return res.status(400).json({ error: 'astronomy_shop_url must be a string' });
-    }
-    const trimmed = astronomy_shop_url.trim();
-    if (trimmed !== '' && !/^https?:\/\//i.test(trimmed)) {
-      return res.status(400).json({ error: 'astronomy_shop_url must start with http:// or https://' });
-    }
-    astronomyShopUrl = trimmed;
-  }
-  if (otel_env !== undefined) {
-    if (typeof otel_env !== 'string') {
-      return res.status(400).json({ error: 'otel_env must be a string' });
-    }
-    otelEnv = otel_env.trim();
-  }
-  if (itsi_url !== undefined) {
-    if (typeof itsi_url !== 'string') {
-      return res.status(400).json({ error: 'itsi_url must be a string' });
-    }
-    const trimmed = itsi_url.trim();
-    if (trimmed !== '' && !/^https?:\/\//i.test(trimmed)) {
-      return res.status(400).json({ error: 'itsi_url must start with http:// or https://' });
-    }
-    itsiUrl = trimmed;
-  }
-  if (itsi_username !== undefined) {
-    if (typeof itsi_username !== 'string') {
-      return res.status(400).json({ error: 'itsi_username must be a string' });
-    }
-    itsiUsername = itsi_username.trim();
-  }
-  if (itsi_password !== undefined) {
-    if (typeof itsi_password !== 'string') {
-      return res.status(400).json({ error: 'itsi_password must be a string' });
-    }
-    itsiPassword = itsi_password.trim();
-  }
-  res.json({
-    splunk_org_id: splunkOrgId,
-    astronomy_shop_url: astronomyShopUrl,
-    otel_env: otelEnv,
-    itsi_url: itsiUrl,
-    itsi_username: itsiUsername,
-    itsi_password: itsiPassword,
-  });
 });
 
 // 全問題取得（管理者ビュー、回答キーワード付き）
-router.get('/questions', async (req: Request, res: Response) => {
+router.get('/questions', async (c) => {
   try {
-    res.json(QUESTIONS);
+    return c.json(QUESTIONS);
   } catch (error) {
     console.error('Error getting questions:', error);
-    res.status(500).json({ error: 'Failed to get questions' });
+    return c.json({ error: 'Failed to get questions' }, 500);
   }
 });
 
 // ゲーム統計取得
-router.get('/stats', async (req: Request, res: Response) => {
+router.get('/stats', async (c) => {
   try {
-    // 全チームを取得
     const teamsResult = await docClient.send(
       new ScanCommand({
         TableName: TABLES.TEAMS,
@@ -406,7 +379,6 @@ router.get('/stats', async (req: Request, res: Response) => {
     );
     const teams = teamsResult.Items || [];
 
-    // 全回答を取得
     const answersResult = await docClient.send(
       new ScanCommand({
         TableName: TABLES.ANSWERS,
@@ -414,11 +386,9 @@ router.get('/stats', async (req: Request, res: Response) => {
     );
     const answers = answersResult.Items || [];
 
-    // 統計を計算
     const correctAnswers = answers.filter((a) => a.is_correct);
     const totalAttempts = answers.reduce((sum, a) => sum + (a.attempt_count || 1), 0);
 
-    // 問題ごとの完了率
     const questionStats = QUESTIONS.map((q) => {
       const questionAnswers = correctAnswers.filter(
         (a) => a.question_id === q.question_id
@@ -435,7 +405,7 @@ router.get('/stats', async (req: Request, res: Response) => {
       };
     });
 
-    res.json({
+    return c.json({
       total_teams: teams.length,
       total_questions: QUESTIONS.length,
       total_correct_answers: correctAnswers.length,
@@ -451,7 +421,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error getting stats:', error);
-    res.status(500).json({ error: 'Failed to get stats' });
+    return c.json({ error: 'Failed to get stats' }, 500);
   }
 });
 

@@ -1,15 +1,16 @@
-import { Router, Request, Response } from 'express';
+import { Hono } from 'hono';
 import { QUESTIONS, getQuestion, getQuestionsForStage, getTeamProgress } from '../services/scoring';
-import { getGameStartedAt } from './admin';
+import { getSettings } from '../services/settings';
 import { HINT_AVAILABLE_AFTER_MINUTES } from '../constants/game';
 import { getElapsedMinutes } from '../utils/time';
 
-const router = Router();
+const router = new Hono();
 
 // Get all questions (without answer keywords for team view)
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (c) => {
   try {
-    const { stage, team_id } = req.query;
+    const stage = c.req.query('stage');
+    const team_id = c.req.query('team_id');
 
     let questions = QUESTIONS;
 
@@ -34,7 +35,8 @@ router.get('/', async (req: Request, res: Response) => {
 
     // Remove answer keywords for team view (security)
     // explanation is included only for answered questions
-    const elapsedMinutes = getElapsedMinutes(getGameStartedAt());
+    const gameSettings = await getSettings();
+    const elapsedMinutes = getElapsedMinutes(gameSettings.game_started_at || null);
     const hintsAvailable = elapsedMinutes >= HINT_AVAILABLE_AFTER_MINUTES;
 
     const sanitizedQuestions = questions.map((q) => {
@@ -55,27 +57,26 @@ router.get('/', async (req: Request, res: Response) => {
       };
     });
 
-    res.json({
+    return c.json({
       questions: sanitizedQuestions,
       progress,
     });
   } catch (error) {
     console.error('Error getting questions:', error);
-    res.status(500).json({ error: 'Failed to get questions' });
+    return c.json({ error: 'Failed to get questions' }, 500);
   }
 });
 
 // Get a specific question
-router.get('/:questionId', async (req: Request, res: Response) => {
+router.get('/:questionId', async (c) => {
   try {
-    const { questionId } = req.params;
+    const questionId = c.req.param('questionId');
 
     const question = getQuestion(questionId);
     if (!question) {
-      return res.status(404).json({ error: 'Question not found' });
+      return c.json({ error: 'Question not found' }, 404);
     }
 
-    // Remove answer keywords for security
     const sanitizedQuestion = {
       question_id: question.question_id,
       flag_name: question.flag_name,
@@ -85,20 +86,19 @@ router.get('/:questionId', async (req: Request, res: Response) => {
       stage: question.stage,
     };
 
-    res.json(sanitizedQuestion);
+    return c.json(sanitizedQuestion);
   } catch (error) {
     console.error('Error getting question:', error);
-    res.status(500).json({ error: 'Failed to get question' });
+    return c.json({ error: 'Failed to get question' }, 500);
   }
 });
 
 // Get questions for a specific stage
-router.get('/stage/:stageNumber', async (req: Request, res: Response) => {
+router.get('/stage/:stageNumber', async (c) => {
   try {
-    const { stageNumber } = req.params;
+    const stageNumber = c.req.param('stageNumber');
     const questions = getQuestionsForStage(Number(stageNumber));
 
-    // Remove answer keywords
     const sanitizedQuestions = questions.map((q) => ({
       question_id: q.question_id,
       flag_name: q.flag_name,
@@ -108,10 +108,10 @@ router.get('/stage/:stageNumber', async (req: Request, res: Response) => {
       stage: q.stage,
     }));
 
-    res.json(sanitizedQuestions);
+    return c.json(sanitizedQuestions);
   } catch (error) {
     console.error('Error getting questions by stage:', error);
-    res.status(500).json({ error: 'Failed to get questions' });
+    return c.json({ error: 'Failed to get questions' }, 500);
   }
 });
 

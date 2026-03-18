@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Hono } from 'hono';
 import {
   docClient,
   TABLES,
@@ -13,10 +13,10 @@ import {
   updateTeamScore,
   getTeamProgress,
 } from '../services/scoring';
-import { getGameState } from './admin';
+import { getSettings } from '../services/settings';
 import { getElapsedMinutes } from '../utils/time';
 
-const router = Router();
+const router = new Hono();
 
 interface AnswerSubmission {
   team_id: string;
@@ -25,25 +25,27 @@ interface AnswerSubmission {
 }
 
 // 回答を提出
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (c) => {
   try {
     // ゲーム状態チェック（アクティブでなければ回答を受け付けない）
-    if (getGameState() !== 'active') {
-      return res.status(403).json({ error: 'ゲームが開始されていません' });
+    const settings = await getSettings();
+    if (settings.game_state !== 'active') {
+      return c.json({ error: 'ゲームが開始されていません' }, 403);
     }
 
-    const { team_id, question_id, answer_text }: AnswerSubmission = req.body;
+    const { team_id, question_id, answer_text } = await c.req.json<AnswerSubmission>();
 
     if (!team_id || !question_id || !answer_text) {
-      return res.status(400).json({
-        error: 'team_id, question_id, and answer_text are required',
-      });
+      return c.json(
+        { error: 'team_id, question_id, and answer_text are required' },
+        400
+      );
     }
 
     // 問題を取得
     const question = getQuestion(question_id);
     if (!question) {
-      return res.status(404).json({ error: 'Question not found' });
+      return c.json({ error: 'Question not found' }, 404);
     }
 
     // チーム情報を取得して経過時間を計算
@@ -55,7 +57,7 @@ router.post('/', async (req: Request, res: Response) => {
     );
 
     if (!teamResult.Item) {
-      return res.status(404).json({ error: 'Team not found' });
+      return c.json({ error: 'Team not found' }, 404);
     }
 
     const team = teamResult.Item;
@@ -70,10 +72,13 @@ router.post('/', async (req: Request, res: Response) => {
     );
 
     if (existingAnswer.Item?.is_correct) {
-      return res.status(400).json({
-        error: 'Question already answered correctly',
-        existing_answer: existingAnswer.Item,
-      });
+      return c.json(
+        {
+          error: 'Question already answered correctly',
+          existing_answer: existingAnswer.Item,
+        },
+        400
+      );
     }
 
     // 回答回数を取得
@@ -114,7 +119,7 @@ router.post('/', async (req: Request, res: Response) => {
     // 更新された進捗を取得
     const progress = await getTeamProgress(team_id);
 
-    res.json({
+    return c.json({
       result: isCorrect ? 'correct' : 'incorrect',
       answer,
       progress,
@@ -125,14 +130,14 @@ router.post('/', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error submitting answer:', error);
-    res.status(500).json({ error: 'Failed to submit answer' });
+    return c.json({ error: 'Failed to submit answer' }, 500);
   }
 });
 
 // チームの回答一覧を取得
-router.get('/team/:teamId', async (req: Request, res: Response) => {
+router.get('/team/:teamId', async (c) => {
   try {
-    const { teamId } = req.params;
+    const teamId = c.req.param('teamId');
 
     const result = await docClient.send(
       new QueryCommand({
@@ -144,17 +149,18 @@ router.get('/team/:teamId', async (req: Request, res: Response) => {
       })
     );
 
-    res.json(result.Items || []);
+    return c.json(result.Items || []);
   } catch (error) {
     console.error('Error getting answers:', error);
-    res.status(500).json({ error: 'Failed to get answers' });
+    return c.json({ error: 'Failed to get answers' }, 500);
   }
 });
 
 // 特定の回答を取得
-router.get('/team/:teamId/question/:questionId', async (req: Request, res: Response) => {
+router.get('/team/:teamId/question/:questionId', async (c) => {
   try {
-    const { teamId, questionId } = req.params;
+    const teamId = c.req.param('teamId');
+    const questionId = c.req.param('questionId');
 
     const result = await docClient.send(
       new GetCommand({
@@ -164,13 +170,13 @@ router.get('/team/:teamId/question/:questionId', async (req: Request, res: Respo
     );
 
     if (!result.Item) {
-      return res.status(404).json({ error: 'Answer not found' });
+      return c.json({ error: 'Answer not found' }, 404);
     }
 
-    res.json(result.Item);
+    return c.json(result.Item);
   } catch (error) {
     console.error('Error getting answer:', error);
-    res.status(500).json({ error: 'Failed to get answer' });
+    return c.json({ error: 'Failed to get answer' }, 500);
   }
 });
 

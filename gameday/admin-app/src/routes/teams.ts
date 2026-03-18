@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Hono } from 'hono';
 import {
   docClient,
   TABLES,
@@ -10,7 +10,7 @@ import {
 } from '../services/dynamodb';
 import { getTeamProgress, updateTeamScore } from '../services/scoring';
 
-const router = Router();
+const router = new Hono();
 
 interface Team {
   team_id: string;
@@ -24,12 +24,12 @@ interface Team {
 }
 
 // チーム作成（フレンドリーID自動生成: team-01, team-02, ...）
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (c) => {
   try {
-    const { team_name, ec2_ip } = req.body;
+    const { team_name, ec2_ip } = await c.req.json<{ team_name?: string; ec2_ip?: string }>();
 
     if (!team_name) {
-      return res.status(400).json({ error: 'team_name is required' });
+      return c.json({ error: 'team_name is required' }, 400);
     }
 
     // 次のチームIDを生成（既存チームの最大番号 + 1）
@@ -44,7 +44,7 @@ router.post('/', async (req: Request, res: Response) => {
     const team: Team = {
       team_id: teamId,
       team_name,
-      ec2_ip: ec2_ip || null,
+      ec2_ip: ec2_ip || undefined,
       total_score: 0,
       questions_correct: 0,
       current_stage: 1,
@@ -59,15 +59,15 @@ router.post('/', async (req: Request, res: Response) => {
       })
     );
 
-    res.status(201).json(team);
+    return c.json(team, 201);
   } catch (error) {
     console.error('Error creating team:', error);
-    res.status(500).json({ error: 'Failed to create team' });
+    return c.json({ error: 'Failed to create team' }, 500);
   }
 });
 
 // 全チーム取得
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (c) => {
   try {
     const result = await docClient.send(
       new ScanCommand({
@@ -76,21 +76,19 @@ router.get('/', async (req: Request, res: Response) => {
     );
 
     const teams = (result.Items || []) as Team[];
-
-    // スコア降順でソート
     teams.sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
 
-    res.json(teams);
+    return c.json(teams);
   } catch (error) {
     console.error('Error getting teams:', error);
-    res.status(500).json({ error: 'Failed to get teams' });
+    return c.json({ error: 'Failed to get teams' }, 500);
   }
 });
 
 // 特定チーム取得
-router.get('/:teamId', async (req: Request, res: Response) => {
+router.get('/:teamId', async (c) => {
   try {
-    const { teamId } = req.params;
+    const teamId = c.req.param('teamId');
 
     const result = await docClient.send(
       new GetCommand({
@@ -100,22 +98,21 @@ router.get('/:teamId', async (req: Request, res: Response) => {
     );
 
     if (!result.Item) {
-      return res.status(404).json({ error: 'Team not found' });
+      return c.json({ error: 'Team not found' }, 404);
     }
 
-    res.json(result.Item);
+    return c.json(result.Item);
   } catch (error) {
     console.error('Error getting team:', error);
-    res.status(500).json({ error: 'Failed to get team' });
+    return c.json({ error: 'Failed to get team' }, 500);
   }
 });
 
 // チームスコアと進捗取得
-router.get('/:teamId/score', async (req: Request, res: Response) => {
+router.get('/:teamId/score', async (c) => {
   try {
-    const { teamId } = req.params;
+    const teamId = c.req.param('teamId');
 
-    // チーム情報を取得
     const teamResult = await docClient.send(
       new GetCommand({
         TableName: TABLES.TEAMS,
@@ -124,27 +121,30 @@ router.get('/:teamId/score', async (req: Request, res: Response) => {
     );
 
     if (!teamResult.Item) {
-      return res.status(404).json({ error: 'Team not found' });
+      return c.json({ error: 'Team not found' }, 404);
     }
 
-    // 詳細な進捗を取得
     const progress = await getTeamProgress(teamId);
 
-    res.json({
+    return c.json({
       team: teamResult.Item,
       progress,
     });
   } catch (error) {
     console.error('Error getting team score:', error);
-    res.status(500).json({ error: 'Failed to get team score' });
+    return c.json({ error: 'Failed to get team score' }, 500);
   }
 });
 
 // チーム情報更新
-router.put('/:teamId', async (req: Request, res: Response) => {
+router.put('/:teamId', async (c) => {
   try {
-    const { teamId } = req.params;
-    const { team_name, ec2_ip, current_stage } = req.body;
+    const teamId = c.req.param('teamId');
+    const { team_name, ec2_ip, current_stage } = await c.req.json<{
+      team_name?: string;
+      ec2_ip?: string;
+      current_stage?: number;
+    }>();
 
     const updateExpressions: string[] = [];
     const expressionValues: Record<string, unknown> = {};
@@ -176,7 +176,6 @@ router.put('/:teamId', async (req: Request, res: Response) => {
       })
     );
 
-    // 更新後のチーム情報を取得
     const result = await docClient.send(
       new GetCommand({
         TableName: TABLES.TEAMS,
@@ -184,19 +183,18 @@ router.put('/:teamId', async (req: Request, res: Response) => {
       })
     );
 
-    res.json(result.Item);
+    return c.json(result.Item);
   } catch (error) {
     console.error('Error updating team:', error);
-    res.status(500).json({ error: 'Failed to update team' });
+    return c.json({ error: 'Failed to update team' }, 500);
   }
 });
 
 // チーム削除（関連する回答レコードも削除）
-router.delete('/:teamId', async (req: Request, res: Response) => {
+router.delete('/:teamId', async (c) => {
   try {
-    const { teamId } = req.params;
+    const teamId = c.req.param('teamId');
 
-    // チームの存在確認
     const teamResult = await docClient.send(
       new GetCommand({
         TableName: TABLES.TEAMS,
@@ -205,10 +203,9 @@ router.delete('/:teamId', async (req: Request, res: Response) => {
     );
 
     if (!teamResult.Item) {
-      return res.status(404).json({ error: 'Team not found' });
+      return c.json({ error: 'Team not found' }, 404);
     }
 
-    // 関連する回答レコードを検索して削除
     const answersResult = await docClient.send(
       new ScanCommand({
         TableName: TABLES.ANSWERS,
@@ -229,7 +226,6 @@ router.delete('/:teamId', async (req: Request, res: Response) => {
       );
     }
 
-    // チームレコードを削除
     await docClient.send(
       new DeleteCommand({
         TableName: TABLES.TEAMS,
@@ -237,20 +233,20 @@ router.delete('/:teamId', async (req: Request, res: Response) => {
       })
     );
 
-    res.json({
+    return c.json({
       message: 'チームと関連する回答を削除しました',
       deleted_answers: answers.length,
     });
   } catch (error) {
     console.error('Error deleting team:', error);
-    res.status(500).json({ error: 'Failed to delete team' });
+    return c.json({ error: 'Failed to delete team' }, 500);
   }
 });
 
 // チームスコア再計算
-router.post('/:teamId/refresh-score', async (req: Request, res: Response) => {
+router.post('/:teamId/refresh-score', async (c) => {
   try {
-    const { teamId } = req.params;
+    const teamId = c.req.param('teamId');
 
     await updateTeamScore(teamId);
 
@@ -261,10 +257,10 @@ router.post('/:teamId/refresh-score', async (req: Request, res: Response) => {
       })
     );
 
-    res.json(result.Item);
+    return c.json(result.Item);
   } catch (error) {
     console.error('Error refreshing team score:', error);
-    res.status(500).json({ error: 'Failed to refresh team score' });
+    return c.json({ error: 'Failed to refresh team score' }, 500);
   }
 });
 

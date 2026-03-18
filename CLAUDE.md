@@ -34,7 +34,7 @@ make start
 | fraud-detection | Kotlin | Kafkaコンシューマー |
 | accounting | C# | .NET/Kafka |
 | load-generator | Python | Locust |
-| gameday-admin (backend) | TypeScript | Express/AWS SDK |
+| gameday-admin (backend) | TypeScript | Hono/AWS SDK |
 | gameday-admin (frontend) | TypeScript | Preact/SWR/Vite |
 
 ## Gameday Admin App
@@ -42,7 +42,7 @@ make start
 `gameday/admin-app/` にあるGameday用の管理・チーム回答アプリケーション。
 
 ### 技術スタック
-- **バックエンド**: Express + TypeScript + AWS SDK (DynamoDB)
+- **バックエンド**: Hono + TypeScript + AWS SDK (DynamoDB)
 - **フロントエンド**: Preact + SWR + Vite（マルチページ: team + admin）
 - **デプロイ**: Docker (マルチステージビルド) → ECR → ECS (CloudFormation)
 
