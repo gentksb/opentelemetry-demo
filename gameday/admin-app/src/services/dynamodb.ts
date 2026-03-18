@@ -44,6 +44,7 @@ export const TABLES = {
   TEAMS: process.env.TEAMS_TABLE || 'gameday-teams',
   ANSWERS: process.env.ANSWERS_TABLE || 'gameday-answers',
   QUESTIONS: process.env.QUESTIONS_TABLE || 'gameday-questions',
+  SETTINGS: process.env.SETTINGS_TABLE || 'gameday-settings',
 };
 
 export { PutCommand, GetCommand, QueryCommand, ScanCommand, UpdateCommand, DeleteCommand };

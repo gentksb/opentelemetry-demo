@@ -113,7 +113,8 @@ ITSIとThousandEyes連携を実施した場合のみ、`scoring.ts` のコメン
 ## タグ運用
 
 CloudFormationテンプレートにはプロジェクトタグ (`Project=o11y-gameday`) のみ定義しています。
-組織固有のタグ（`splunkit_*` 等）は `aws cloudformation deploy --tags` でスタックレベルタグとして付与してください。
+組織固有のタグは `aws cloudformation deploy --tags` でスタックレベルタグとして付与してください。
+管理アプリ (ECS Express Mode) は `deploy-admin.sh --tags` で渡すことで内部リソース（ALB等）にもタグが伝播します。
 
 ## docs
 

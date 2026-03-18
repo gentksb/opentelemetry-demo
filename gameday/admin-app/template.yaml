@@ -52,8 +52,30 @@ Parameters:
     Default: "dev"
     Description: Application version (git SHA) injected as service.version tag
 
+  OrgTag1Key:
+    Type: String
+    Default: ""
+    Description: "Organization tag #1 key (pass-through to ECS Express Mode managed resources for SCP compliance)"
+
+  OrgTag1Value:
+    Type: String
+    Default: ""
+    Description: "Organization tag #1 value"
+
+  OrgTag2Key:
+    Type: String
+    Default: ""
+    Description: "Organization tag #2 key"
+
+  OrgTag2Value:
+    Type: String
+    Default: ""
+    Description: "Organization tag #2 value"
+
 Conditions:
   ShouldCreateDynamoDB: !Equals [!Ref CreateDynamoDB, "true"]
+  HasOrgTag1: !Not [!Equals [!Ref OrgTag1Key, ""]]
+  HasOrgTag2: !Not [!Equals [!Ref OrgTag2Key, ""]]
 
 Resources:
   # ============================================================
@@ -114,6 +136,23 @@ Resources:
         - Key: Project
           Value: o11y-gameday
 
+  SettingsTable:
+    Type: AWS::DynamoDB::Table
+    Condition: ShouldCreateDynamoDB
+    DeletionPolicy: Retain
+    Properties:
+      TableName: !Sub gameday-settings${StackSuffix}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: setting_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: setting_key
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: o11y-gameday
+
   # ============================================================
   # IAM Roles
   # ============================================================
@@ -162,6 +201,7 @@ Resources:
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-teams${StackSuffix}
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-answers${StackSuffix}
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-questions${StackSuffix}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-settings${StackSuffix}
 
   # Infrastructure Role (Express Mode: manages ALB, SG, ACM, auto-scaling)
   InfrastructureRole:
@@ -212,6 +252,8 @@ Resources:
             Value: !Sub gameday-answers${StackSuffix}
           - Name: QUESTIONS_TABLE
             Value: !Sub gameday-questions${StackSuffix}
+          - Name: SETTINGS_TABLE
+            Value: !Sub gameday-settings${StackSuffix}
           - Name: CLUSTER_NAME
             Value: !Ref ClusterName
           - Name: SPLUNK_REALM
@@ -225,15 +267,25 @@ Resources:
           - Name: OTEL_SERVICE_NAME
             Value: gameday-admin
           - Name: OTEL_RESOURCE_ATTRIBUTES
-            Value: !Sub "deployment.environment=${ClusterName},service.version=${AppVersion}"
+            Value: !Sub "deployment.environment=z-gameday-admin,service.version=${AppVersion}"
       ScalingTarget:
         MinTaskCount: 1
-        MaxTaskCount: 2
+        MaxTaskCount: 1
         AutoScalingMetric: AVERAGE_CPU
         AutoScalingTargetValue: 70
       Tags:
         - Key: Project
           Value: o11y-gameday
+        - !If
+          - HasOrgTag1
+          - Key: !Ref OrgTag1Key
+            Value: !Ref OrgTag1Value
+          - !Ref AWS::NoValue
+        - !If
+          - HasOrgTag2
+          - Key: !Ref OrgTag2Key
+            Value: !Ref OrgTag2Value
+          - !Ref AWS::NoValue
 
 Outputs:
   # DynamoDB

@@ -22,6 +22,7 @@ SPLUNK_REALM="jp0"
 SPLUNK_ACCESS_TOKEN=""
 SPLUNK_RUM_TOKEN=""
 ADMIN_PASSWORD=""
+USER_TAGS=()
 
 # Colors for output
 RED='\033[0;31m'
@@ -47,6 +48,8 @@ Options:
   --create-dynamodb      Create DynamoDB tables (skip if already exist in another stack)
   --splunk-access-token  Splunk access token for APM/Metrics ingest
   --rum-token            Splunk RUM token for browser RUM (baked into frontend at build time)
+  --tags K=V [K=V]  Organization tags for SCP compliance (up to 2, same format as CFn --tags)
+                         Applied to ECS Express Mode managed resources (ALB, SG, etc.)
   --skip-build           Skip Docker build and ECR push (use existing image)
   --dry-run              Show what would be deployed without deploying
   --delete               Delete the stack and ECR repository
@@ -55,6 +58,9 @@ Options:
 Examples:
   # Full deploy (build + push + CloudFormation)
   $0 --create-dynamodb --admin-password secret123
+
+  # With organization tags (same format as aws cloudformation deploy --tags)
+  $0 --create-dynamodb --admin-password secret123 --tags data_classification=public environment_type=non-prd
 
   # Deploy a second instance with suffix
   $0 --stack-suffix event2 --create-dynamodb
@@ -123,6 +129,13 @@ while [[ $# -gt 0 ]]; do
         --admin-password)
             ADMIN_PASSWORD="$2"
             shift 2
+            ;;
+        --tags)
+            shift
+            while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do
+                USER_TAGS+=("$1")
+                shift
+            done
             ;;
         --skip-build)
             SKIP_BUILD=true
@@ -365,6 +378,26 @@ fi
 
 if [[ "$DRY_RUN" != "true" ]]; then
     APP_VERSION=${APP_VERSION:-$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "dev")}
+
+    # Parse --tags into CFn parameter overrides and stack-level tags
+    # Format: same as aws cloudformation deploy --tags (space-separated Key=Value pairs)
+    ORG_TAG_PARAMS=()
+    STACK_TAGS=("Project=o11y-gameday")
+    if [[ ${#USER_TAGS[@]} -gt 0 ]]; then
+        TAG_INDEX=0
+        for PAIR in "${USER_TAGS[@]}"; do
+            KEY="${PAIR%%=*}"
+            VALUE="${PAIR#*=}"
+            STACK_TAGS+=("${PAIR}")
+            TAG_INDEX=$((TAG_INDEX + 1))
+            if [[ $TAG_INDEX -le 2 ]]; then
+                ORG_TAG_PARAMS+=("OrgTag${TAG_INDEX}Key=${KEY}" "OrgTag${TAG_INDEX}Value=${VALUE}")
+            else
+                log_warn "Only up to 2 org tags are supported for Express Mode propagation. Extra tag '${KEY}' applied as stack-level tag only."
+            fi
+        done
+    fi
+
     set +e
     DEPLOY_OUTPUT=$(aws cloudformation deploy \
         --template-file "${SCRIPT_DIR}/template.yaml" \
@@ -380,9 +413,10 @@ if [[ "$DRY_RUN" != "true" ]]; then
             "$SPLUNK_ACCESS_TOKEN_PARAM" \
             AppVersion="$APP_VERSION" \
             ImageVersion="$(date +%s)" \
+            "${ORG_TAG_PARAMS[@]}" \
         --capabilities CAPABILITY_NAMED_IAM \
         --tags \
-            Project=o11y-gameday 2>&1)
+            "${STACK_TAGS[@]}" 2>&1)
     DEPLOY_EXIT=$?
     set -e
 

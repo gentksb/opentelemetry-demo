@@ -237,8 +237,8 @@ Resources:
             sudo -u ec2-user kind get kubeconfig --name gameday > /home/ec2-user/.kube/config
           chown -R ec2-user:ec2-user /home/ec2-user/.kube
 
-          # Create local-path storage class (default in kind)
-          sudo -u ec2-user kubectl get sc local-path || echo "local-path SC already exists"
+          # Verify StorageClass (kind creates 'standard' by default; deploy-teams.sh creates 'local-path' alias if needed)
+          sudo -u ec2-user kubectl get sc
 
           # Store Splunk credentials
           cat <<EOF > /home/ec2-user/splunk-config.env
