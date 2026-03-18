@@ -10,8 +10,8 @@
 ## 技術スタック
 
 - **リポジトリ**: splunk/opentelemetry-demo（Kubernetesデプロイ専用）
-- **インフラ**: kind on AWS EC2
-- **IaC**: AWS Cfn
+- **インフラ**: kind on AWS EC2（CloudFormationで構築）
+- **IaC**: AWS CloudFormation
 - **管理アプリ**: Express.js(Backend) + Vite/Preact(Frontend) + DynamoDB
 - **リージョン**: ap-northeast-1 (東京)
 
@@ -19,38 +19,39 @@
 
 ### EC2 + kind クラスタ
 
-EC2インスタンス上にkindクラスタを構築し、OpenTelemetry Demoをデプロイする。
+CloudFormationで EC2インスタンスとkindクラスタを構築する。
+UserDataがkindクラスタのセットアップ・リポジトリクローンを自動実行する（約5〜10分）。
+
+**有効なパラメータ**: `KeyName`, `SplunkAccessToken`, `SplunkRealm`, `InstanceType`, `AllowedSSHCidr`
 
 ```bash
-# EC2 + kindクラスタのデプロイ
 aws cloudformation deploy \
   --template-file gameday/infra/ec2-kind-template.yaml \
   --stack-name gameday-kind \
   --region ap-northeast-1 \
   --parameter-overrides \
-    KeyPairName=<KEY_PAIR> \
-    ClusterName=gameday-kind \
-    GitBranch=<BRANCH_NAME> \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --tags splunkit_data_classification=public splunkit_environment_type=non-prd
-
-# EC2のIPアドレスを取得
-aws cloudformation describe-stacks --stack-name gameday-kind \
-  --query "Stacks[0].Outputs[?OutputKey=='PublicIP'].OutputValue" --output text
+    KeyName=<KEY_PAIR> \
+    SplunkAccessToken=<TOKEN> \
+    SplunkRealm=jp0 \
+  --capabilities CAPABILITY_NAMED_IAM
 ```
 
 ### アプリケーションのデプロイ
 
-EC2インスタンスにSSM経由でコマンドを実行し、OpenTelemetry Demoをデプロイする。
+EC2にSSMまたはSSHでログインし、deploy-teams.shを実行する。
+リポジトリは `/home/ec2-user/opentelemetry-demo` にクローン済み。
 
 ```bash
-# アプリケーションのデプロイ（SSM経由）
-INSTANCE_ID=<INSTANCE_ID>
-aws ssm send-command \
-  --instance-ids "$INSTANCE_ID" \
-  --document-name "AWS-RunShellScript" \
-  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh --splunk-token <TOKEN> --rum-token <RUM_TOKEN> --splunk-realm jp0 --cluster-name gameday-kind --enable-flags"]}' \
-  --region ap-northeast-1
+# SSMセッション
+aws ssm start-session --target <INSTANCE_ID> --region ap-northeast-1
+
+# セッション内で実行
+bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh \
+  --splunk-token <TOKEN> \
+  --rum-token <RUM_TOKEN> \
+  --splunk-realm jp0 \
+  --cluster-name gameday-kind \
+  --enable-flags
 ```
 
 ### インフラの削除
@@ -64,7 +65,7 @@ aws cloudformation delete-stack --stack-name gameday-kind --region ap-northeast-
 
 ### 初回デプロイ
 
-DynamoDBテーブルとECS Express Modeサービスを作成する。
+ローカルから実行。DynamoDBテーブルとECS Fargate サービスを作成する。
 
 ```bash
 cd gameday/admin-app
@@ -73,6 +74,7 @@ cd gameday/admin-app
   --create-dynamodb \
   --cluster-name gameday-kind \
   --splunk-realm jp0 \
+  --rum-token <RUM_TOKEN> \
   --admin-password <PASSWORD>
 ```
 
@@ -92,6 +94,21 @@ cd gameday/admin-app
 cd gameday/admin-app
 ./deploy-admin.sh --delete --environment dev
 ```
+
+## 設問（scoring.ts）
+
+### 有効なフラグ
+
+`deploy-teams.sh --enable-flags` で有効化されるフラグ:
+- `cartFailure`: on
+- `imageSlowLoad`: 5sec
+- `adHighCpu`: on
+- `paymentFailure`: 50%
+
+### オプション設問
+
+Q8（ThousandEyes）,Q9(Sytheticsテストによるデータ投入) , Q10(ITSI)はデフォルトでコメントアウト済み。
+ITSIとThousandEyes連携を実施した場合のみ、`scoring.ts` のコメントアウトを解除して `./update-image.sh` を実行する。
 
 ## docs
 

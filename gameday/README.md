@@ -6,13 +6,35 @@ OpenTelemetry DemoにFeature Flagsで障害を注入し、Splunk APM/Infrastruct
 
 ## 前提条件
 
-- AWS CLI（設定済み）
-- Docker
+### ローカル環境
+- AWS CLI（設定済み・デプロイ先アカウントへの権限あり）
+- Docker（管理アプリのビルドに使用）
+- EC2 KeyPair（事前にAWSコンソールで作成済み）
+
+### AWSアカウント権限
+- CloudFormation / EC2 / ECR / ECS / DynamoDB / IAM
+
+### Splunkアカウント
 - Splunk Observability Cloud アカウント
+- (オプション) Splunk ITSI、Cisco ThousandEyes ← Q8で使用。連携している場合のみ
+
+## 事前準備（必要な情報を用意する）
+
+デプロイ前に以下の情報を確認してください：
+
+| 変数 | 説明 | 取得場所 |
+|------|------|----------|
+| `EC2_KEY_PAIR` | EC2 KeyPair名（`.pem`不要） | AWS Console > EC2 > Key Pairs |
+| `SPLUNK_ACCESS_TOKEN` | Splunkアクセストークン（INGEST scope） | Splunk Observability > Settings > Access Tokens |
+| `SPLUNK_RUM_TOKEN` | Splunk RUMトークン（RUM ingest scope） | 同上 |
+| `SPLUNK_REALM` | Splunkレルム（例: `jp0`） | Splunk Observability > Settings > General Settings |
+| `ADMIN_PASSWORD` | 管理画面のパスワード（任意の文字列） | 自分で決める |
 
 ## デプロイ手順
 
 ### 1. EC2 + kindクラスタの作成
+
+ローカルから実行します。CloudFormation完了後、EC2のUserDataがkindクラスタのセットアップを自動実行します（約5〜10分）。
 
 ```bash
 aws cloudformation deploy \
@@ -21,29 +43,76 @@ aws cloudformation deploy \
   --region ap-northeast-1 \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
-    KeyPairName=<KEY_PAIR> \
-    ClusterName=gameday-kind \
-    GitBranch=<BRANCH_NAME> \
-  --tags \
-    splunkit_data_classification=public \
-    splunkit_environment_type=non-prd
+    KeyName=<EC2_KEY_PAIR> \
+    SplunkAccessToken=<SPLUNK_ACCESS_TOKEN> \
+    SplunkRealm=<SPLUNK_REALM>
 ```
 
-### 2. アプリケーションのデプロイ（SSM経由）
+### 2. EC2のIPアドレス・インスタンスIDを取得
 
 ```bash
-INSTANCE_ID=$(aws cloudformation describe-stacks \
-  --stack-name gameday-kind --region ap-northeast-1 \
-  --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" --output text)
-
-aws ssm send-command \
-  --instance-ids $INSTANCE_ID \
-  --document-name "AWS-RunShellScript" \
-  --parameters '{"commands":["sudo -u ec2-user bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh --splunk-token <TOKEN> --splunk-realm jp0 --cluster-name gameday-kind --enable-flags"]}' \
-  --region ap-northeast-1 --timeout-seconds 600
+aws cloudformation describe-stacks \
+  --stack-name gameday-kind \
+  --region ap-northeast-1 \
+  --query "Stacks[0].Outputs" \
+  --output table
 ```
 
-### 3. 管理アプリのデプロイ
+出力例：`PublicIP`, `InstanceId`, `FrontendURL`, `SSHCommand` が表示されます。
+
+### 3. EC2の起動完了を確認
+
+UserDataのセットアップログを確認します。`"Game Day setup complete"` が出るまで待機してください。
+
+```bash
+# SSMセッションでEC2にログイン
+aws ssm start-session --target <INSTANCE_ID> --region ap-northeast-1
+```
+
+セッション内で：
+```bash
+sudo tail -f /var/log/user-data.log
+```
+
+`Game Day setup complete` が表示されたらCtrl+Cで終了し、`exit` でセッションを抜けます。
+
+### 4. OpenTelemetry Demoのデプロイ
+
+EC2にログインして `deploy-teams.sh` を実行します。リポジトリはUserDataで `/home/ec2-user/opentelemetry-demo` にクローン済みです。
+
+**方法A: SSMセッション（SSH不要）**
+
+```bash
+aws ssm start-session --target <INSTANCE_ID> --region ap-northeast-1
+```
+
+セッション内で：
+```bash
+bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh \
+  --splunk-token <SPLUNK_ACCESS_TOKEN> \
+  --rum-token <SPLUNK_RUM_TOKEN> \
+  --splunk-realm <SPLUNK_REALM> \
+  --cluster-name gameday-kind \
+  --enable-flags
+```
+
+**方法B: SSH接続**
+
+```bash
+ssh -i <EC2_KEY_PAIR>.pem ec2-user@<EC2_IP> \
+  "bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh \
+    --splunk-token <SPLUNK_ACCESS_TOKEN> \
+    --rum-token <SPLUNK_RUM_TOKEN> \
+    --splunk-realm <SPLUNK_REALM> \
+    --cluster-name gameday-kind \
+    --enable-flags"
+```
+
+デプロイ完了後、OTel environmentタグが表示されます（例: `gameday-kind-a1b2c3`）。Splunk APMでのフィルタに使用します。
+
+### 5. 管理アプリのデプロイ
+
+ローカルから実行します。初回は `--create-dynamodb` を付けてDynamoDBテーブルを作成します。
 
 ```bash
 cd gameday/admin-app
@@ -51,13 +120,16 @@ cd gameday/admin-app
   --environment dev \
   --create-dynamodb \
   --cluster-name gameday-kind \
-  --splunk-realm jp0 \
-  --admin-password <PASSWORD>
+  --splunk-realm <SPLUNK_REALM> \
+  --rum-token <SPLUNK_RUM_TOKEN> \
+  --admin-password <ADMIN_PASSWORD>
 ```
 
-### 4. 管理アプリのイメージ更新
+デプロイ完了後にECSエンドポイントが表示されます。
 
-設問定義（`admin-app/src/services/scoring.ts`）変更後：
+### 6. 設問変更後の管理アプリ更新
+
+`admin-app/src/services/scoring.ts` を変更した後、イメージを再ビルドしてデプロイします：
 
 ```bash
 cd gameday/admin-app
@@ -77,52 +149,52 @@ cd gameday/admin-app
 
 ### コンセプト
 
-参加者はSREチームの一員として、「顧客からの問い合わせ」「同僚からの相談」「システムアラート」を起点に障害調査を行うロールプレイ形式。APM Trace だけでなく、Service Map、RUM（Real User Monitoring）、Infrastructure Navigator、Browser DevTools など、複数の可観測性シグナルを横断的に活用する。
+参加者はSREチームの一員として、「顧客からの問い合わせ」「同僚からの相談」「システムアラート」を起点に障害調査を行うロールプレイ形式。APM Trace・Service Map・RUM・Infrastructure Navigator を横断的に活用する。
 
 ### フラグ運用方針
 
-全フラグを同時に有効化する（単一フェーズ、全8問同時出題）。デプロイ時に `--enable-flags` を指定すると自動的に有効化される。
+`--enable-flags` 指定時に以下のフラグが自動的に有効化されます（単一フェーズ、全問同時出題）：
 
-有効化するフラグ一覧：
-- `productCatalogFailure` - 特定商品のみエラー（Q1で使用）
-- `cartFailure` - Redis接続失敗（Q3で使用）
-- `imageSlowLoad` - Envoyフォルトインジェクションによる画像遅延（Q4, Q8で使用）
-- `adHighCpu` - CPUタイトループによるリソース異常（Q6で使用）
-- `paymentUnreachable` - 不正ホストへのgRPC接続失敗（Q7で使用）
+| フラグ名 | 設定値 | 使用設問 |
+|---------|--------|---------|
+| `cartFailure` | on | Q2 |
+| `imageSlowLoad` | 5sec | Q3 |
+| `adHighCpu` | on | Q5 |
+| `paymentFailure` | 50% | Q6, Q7 |
 
-### 設問一覧（全8問）
+Feature Flag UIからも手動で変更可能です。
 
-| # | トリガー | シグナル | Flag | サービス | シナリオ概要 | 回答 |
-|---|---------|---------|------|----------|-------------|------|
-| 1 | 顧客 | APM Trace | `productCatalogFailure` | product-catalog | 商品ページエラー報告 → エラーTrace から影響商品IDを特定 | `OLJCESPC7Z` |
-| 2 | 同僚 | Service Map | なし | checkout | 下流アーキテクチャ把握 → Kafka経由の下流サービスを特定 | `accounting` or `fraud-detection` |
-| 3 | 顧客 | APM Trace | `cartFailure` | cart | カートが空にできない → 例外メッセージからデータストア種類を特定 | `redis` |
-| 4 | 顧客 | RUM | `imageSlowLoad` | frontend | 画像表示が遅い → RUMで遅延リクエストのURLパスパターンを特定 | `images` |
-| 5 | 同僚 | RUM Tag Spotlight | なし | frontend | ユーザー層の分析依頼 → enduser.role で最多ロールを特定 | `Guest` |
-| 6 | アラート | Infrastructure | `adHighCpu` | ad | CPU使用率上昇アラート → Infrastructure Navigator で高CPU ワークロードを特定 | `ad` |
-| 7 | アラート | Service Map | `paymentUnreachable` | checkout | エラー率上昇アラート → Service Map で障害サービスを特定 | `payment` |
-| 8 | 顧客 | Browser DevTools | `imageSlowLoad` | frontend | Q4の深堀り → DevToolsで遅延制御HTTPヘッダー名を特定 | `x-envoy-fault-delay-request` |
+### 設問一覧
+
+設問定義は `gameday/admin-app/src/services/scoring.ts` の `QUESTIONS` 配列に保存されています。
+
+> **注意**: Q8（ThousandEyes拠点数）,Q10はITSIとThousandEyes連携が必要なため、デフォルトではコメントアウトされています。Q9は別途Syntheticsの設定が必要となるため同様です。
+> 連携を実施したり、必要なSynthetics testの設定を有効化できる場合は `scoring.ts` のコメントアウトを解除し、 `./update-image.sh` を実行してください。
 
 ## クリーンアップ
 
 ```bash
-# アプリケーション削除（ローカルのみ利用を推奨、EC2デプロイ時はインフラ毎削除）
-./gameday/infra/cleanup-teams.sh --force
+# 管理アプリ削除（ローカルから実行）
+cd gameday/admin-app
+./deploy-admin.sh --delete --environment dev
 
-# 管理アプリ削除
-./gameday/admin-app/deploy-admin.sh --delete --environment dev
-
-# EC2 + kindスタック削除
+# EC2 + kindスタック削除（ローカルから実行）
 aws cloudformation delete-stack --stack-name gameday-kind --region ap-northeast-1
+```
+
+アプリケーションのみ削除してEC2を残す場合（EC2にSSM/SSHで接続後）：
+```bash
+bash /home/ec2-user/opentelemetry-demo/gameday/infra/cleanup-teams.sh --force
 ```
 
 ## トラブルシューティング
 
 | 症状 | 対処 |
 |------|------|
-| flagdがPending | `local-path` StorageClassが未作成。deploy-teams.shが自動作成するが、手動作成は`kubectl get sc`で確認後対応 |
-| Splunkにデータが届かない | `kubectl get pods -n splunk-monitoring` / `kubectl logs -n splunk-monitoring -l app=splunk-otel-collector` |
-| Feature Flagが動作しない | `kubectl logs -n <NAMESPACE> deployment/flagd` |
-| fraud-detectionがInit状態 | SQL Serverの初期化待ち。`sql-server-fraud-0`がRunningになるまで待機 |
-| `/admin` にログインできない | `deploy-admin.sh --admin-password <PASSWORD>` でパスワードを再設定 |
-| スコアボードAPIが500エラー | `aws dynamodb list-tables` でテーブル存在確認。なければ `--create-dynamodb` 付きで再デプロイ |
+| UserDataのセットアップが終わらない | `sudo tail -100 /var/log/user-data.log` でエラーを確認 |
+| `deploy-teams.sh: manifest file not found` | EC2のUserDataがまだ実行中。ログを確認して完了を待つ |
+| flagdがPending | `local-path` StorageClassが未作成。deploy-teams.shが自動作成するが、`kubectl get sc` で確認 |
+| Splunkにデータが届かない | `kubectl get pods -n splunk-monitoring` でCollectorの状態を確認。`kubectl logs -n splunk-monitoring -l app=splunk-otel-collector` |
+| Feature Flagが動作しない | `kubectl logs -n otel-demo deployment/flagd` |
+| `/admin` にログインできない | `deploy-admin.sh --admin-password <PASSWORD>` で再デプロイ |
+| スコアボードAPIが500エラー | `aws dynamodb list-tables` でテーブル存在確認。`--create-dynamodb` 付きで再デプロイ |

@@ -159,6 +159,9 @@ export const QUESTIONS: Question[] = [
   },
 
   // Q8: ITSI + ThousandEyes - テスト実施拠点数の把握
+  // NOTE: ITSIとThousandEyes連携が必要なため、デフォルトでコメントアウト。
+  // 連携を実施した場合はコメントアウトを解除して ./update-image.sh を実行してください。
+  /*
   {
     question_id: 'q08-thousandeyes-agents',
     flag_name: 'none',
@@ -173,24 +176,28 @@ export const QUESTIONS: Question[] = [
     hint: 'ITSI サービスアナライザーで、Online Shop サービスを見つけます。依存関係を持つ Network に関するサービスから、ThousandEyes のテストに関するエンティティを見つけてみましょう。',
     explanation: 'ThousandEyes と Splunk のインテグレーションを実施し、Contents Pack を有効化すると、ThousandEyes に関するテストデータを ITSI に取り込むことができます。Entity からドリルダウンして ThousandEyes UI へのリンクも自動設定されます。',
   },
+  */
 
-  // Q9: Easter Egg① - APM Tag Spotlight で隠されたメッセージを発見
-  {
-    question_id: 'q09-easter-egg-ask-ai',
-    flag_name: 'none',
-    service: 'openai',
-    trigger_type: 'challenge',
-    difficulty: 'hard',
-    scenario: 'Easter Egg を探そう①',
-    question_text: 'Easter Egg を探して。ある男がオンラインショップに迷い込んだ。朦朧としたまま、彼は焦点の合わない眼で商品ページを開いては閉じている。そして、何度も何度も、同じ言葉をキーボードに打ち込み続ける…。彼はどんな言葉を入力している？',
-    answer_keywords: ['Is this my Easter Egg?', 'is this my easter egg'],
-    base_points: 100,
-    stage: 1,
-    hint: '探しものは AI でも教えてくれない。',
-    explanation: 'オンラインショップの商品ページには Ask AI 機能が含まれています。そのため、APM Service Map 上にも "openai:astronomy-llm" というサービスが表示されており、上流の product-reviews サービスから OpenAI に対してリクエストが実施されています。このサービスに関連するトレースを分析すると、app.product.question という属性でユーザーが実行した質問が記録されています。この属性に関する MetricSets が設定されているため、Tag Spotlight を利用するとどんな質問が実施されたかを確認することができます。',
-  },
+  // // Q9: Easter Egg① - APM Tag Spotlight で隠されたメッセージを発見
+  // {
+  //   question_id: 'q09-easter-egg-ask-ai',
+  //   flag_name: 'none',
+  //   service: 'openai',
+  //   trigger_type: 'challenge',
+  //   difficulty: 'hard',
+  //   scenario: 'Easter Egg を探そう①',
+  //   question_text: 'Easter Egg を探して。ある男がオンラインショップに迷い込んだ。朦朧としたまま、彼は焦点の合わない眼で商品ページを開いては閉じている。そして、何度も何度も、同じ言葉をキーボードに打ち込み続ける…。彼はどんな言葉を入力している？',
+  //   answer_keywords: ['Is this my Easter Egg?', 'is this my easter egg'],
+  //   base_points: 100,
+  //   stage: 1,
+  //   hint: '探しものは AI でも教えてくれない。',
+  //   explanation: 'オンラインショップの商品ページには Ask AI 機能が含まれています。そのため、APM Service Map 上にも "openai:astronomy-llm" というサービスが表示されており、上流の product-reviews サービスから OpenAI に対してリクエストが実施されています。このサービスに関連するトレースを分析すると、app.product.question という属性でユーザーが実行した質問が記録されています。この属性に関する MetricSets が設定されているため、Tag Spotlight を利用するとどんな質問が実施されたかを確認することができます。',
+  // },
 
   // Q10: Easter Egg② - ITSI 集約ポリシーに隠されたメッセージ
+  // NOTE: ITSIが必要なため、デフォルトでコメントアウト。
+  // ITSI連携を実施した場合はコメントアウトを解除して ./update-image.sh を実行してください。
+  /*
   {
     question_id: 'q10-easter-egg-itsi-comment',
     flag_name: 'none',
@@ -205,6 +212,7 @@ export const QUESTIONS: Question[] = [
     hint: '実際の運用現場でこんなことをしたら、ふざけているのかと言われそうですが。',
     explanation: 'ITSI の重要イベントの集約ポリシーでは、特定条件に該当した場合に実行したい操作をアクションルールとして定義することができます。アクションルールの一つとして、エピソードに対するコメントの追加が可能です。今回はゲームに関係のない、無視してよいエピソード（誰に見られることもないイベント）を集約するルールに対してコメントを追加しておきました。',
   },
+  */
 
 ];
 
