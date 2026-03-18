@@ -11,7 +11,7 @@
 set -e
 
 REGION="ap-northeast-1"
-STACK_NAME="gameday-admin-dev"
+STACK_NAME="gameday-admin"
 ECR_REPO_NAME="gameday-admin"
 IMAGE_TAG="latest"
 SPLUNK_ACCESS_TOKEN=""
@@ -28,7 +28,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [--stack-name NAME] [--region REGION] [--splunk-access-token TOKEN] [--rum-token TOKEN]"
             echo ""
             echo "Options:"
-            echo "  --stack-name           CloudFormation stack name (default: gameday-admin-dev)"
+            echo "  --stack-name           CloudFormation stack name (default: gameday-admin)"
             echo "  --region               AWS region (default: ap-northeast-1)"
             echo "  --splunk-access-token  Splunk access token for APM/Metrics ingest"
             echo "  --rum-token            Splunk RUM token (baked into frontend at build time)"
@@ -104,7 +104,7 @@ aws cloudformation deploy \
     --stack-name "$STACK_NAME" \
     --region "$REGION" \
     --parameter-overrides \
-        Environment="$(get_param Environment)" \
+        StackSuffix="$(get_param StackSuffix)" \
         ContainerImage="$IMAGE_URI" \
         CreateDynamoDB="$(get_param CreateDynamoDB)" \
         ClusterName="$(get_param ClusterName)" \
@@ -115,8 +115,6 @@ aws cloudformation deploy \
         ImageVersion="$(date +%s)" \
     --capabilities CAPABILITY_NAMED_IAM \
     --tags \
-        splunkit_data_classification=public \
-        splunkit_environment_type=non-prd \
         Project=o11y-gameday
 
 ENDPOINT=$(aws cloudformation describe-stacks \

@@ -12,7 +12,7 @@ set -e
 
 # Default values
 REGION="ap-northeast-1"
-ENVIRONMENT="dev"
+STACK_SUFFIX=""
 STACK_NAME=""
 ECR_REPO_NAME="gameday-admin"
 IMAGE_TAG="latest"
@@ -40,8 +40,9 @@ Deploy the o11y Game Day Admin App to AWS (ECS Express Mode).
 
 Options:
   --region REGION        AWS region (default: ap-northeast-1)
-  --environment ENV      Environment name: dev or prod (default: dev)
-  --stack-name NAME      CloudFormation stack name (default: gameday-admin-{environment})
+  --stack-suffix SUFFIX  Optional suffix for stack/resource names (default: none)
+                         Stack name becomes gameday-admin-<suffix>
+  --stack-name NAME      CloudFormation stack name (overrides --stack-suffix)
   --image-tag TAG        Docker image tag (default: latest)
   --create-dynamodb      Create DynamoDB tables (skip if already exist in another stack)
   --splunk-access-token  Splunk access token for APM/Metrics ingest
@@ -53,13 +54,10 @@ Options:
 
 Examples:
   # Full deploy (build + push + CloudFormation)
-  $0
+  $0 --create-dynamodb --admin-password secret123
 
-  # Deploy to prod
-  $0 --environment prod
-
-  # Redeploy with new image (skip build if image already pushed)
-  $0 --skip-build
+  # Deploy a second instance with suffix
+  $0 --stack-suffix event2 --create-dynamodb
 
   # Delete everything
   $0 --delete
@@ -90,8 +88,8 @@ while [[ $# -gt 0 ]]; do
             REGION="$2"
             shift 2
             ;;
-        --environment)
-            ENVIRONMENT="$2"
+        --stack-suffix)
+            STACK_SUFFIX="$2"
             shift 2
             ;;
         --stack-name)
@@ -150,9 +148,16 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Compute name suffix (includes leading dash when non-empty)
+if [[ -n "$STACK_SUFFIX" ]]; then
+    NAME_SUFFIX="-${STACK_SUFFIX}"
+else
+    NAME_SUFFIX=""
+fi
+
 # Set defaults that depend on other params
 if [[ -z "$STACK_NAME" ]]; then
-    STACK_NAME="gameday-admin-${ENVIRONMENT}"
+    STACK_NAME="gameday-admin${NAME_SUFFIX}"
 fi
 
 # Get AWS account ID
@@ -197,7 +202,7 @@ if [[ "$DELETE_MODE" == "true" ]]; then
     fi
 
     # DynamoDBテーブルの残存チェック（DeletionPolicy: Retain により削除されない）
-    DYNAMO_TABLES=("gameday-teams-${ENVIRONMENT}" "gameday-answers-${ENVIRONMENT}" "gameday-questions-${ENVIRONMENT}")
+    DYNAMO_TABLES=("gameday-teams${NAME_SUFFIX}" "gameday-answers${NAME_SUFFIX}" "gameday-questions${NAME_SUFFIX}")
     REMAINING_TABLES=()
     for TABLE in "${DYNAMO_TABLES[@]}"; do
         if aws dynamodb describe-table --table-name "$TABLE" --region "$REGION" &>/dev/null 2>&1; then
@@ -257,7 +262,7 @@ echo ""
 log_info "=== o11y Game Day Admin App Deployment ==="
 log_info "Account:     ${AWS_ACCOUNT_ID}"
 log_info "Region:      ${REGION}"
-log_info "Environment: ${ENVIRONMENT}"
+log_info "Suffix:      ${STACK_SUFFIX:-(none)}"
 log_info "Stack:       ${STACK_NAME}"
 log_info "Image:       ${IMAGE_URI}"
 echo ""
@@ -279,7 +284,7 @@ if [[ "$DRY_RUN" != "true" ]]; then
             --repository-name "$ECR_REPO_NAME" \
             --region "$REGION" \
             --image-scanning-configuration scanOnPush=true \
-            --tags Key=splunkit_data_classification,Value=public Key=splunkit_environment_type,Value=non-prd Key=Project,Value=o11y-gameday \
+            --tags Key=Project,Value=o11y-gameday \
             --output text --query 'repository.repositoryUri'
     else
         log_info "ECR repository already exists"
@@ -360,12 +365,13 @@ fi
 
 if [[ "$DRY_RUN" != "true" ]]; then
     APP_VERSION=${APP_VERSION:-$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "dev")}
-    aws cloudformation deploy \
+    set +e
+    DEPLOY_OUTPUT=$(aws cloudformation deploy \
         --template-file "${SCRIPT_DIR}/template.yaml" \
         --stack-name "$STACK_NAME" \
         --region "$REGION" \
         --parameter-overrides \
-            Environment="$ENVIRONMENT" \
+            StackSuffix="$NAME_SUFFIX" \
             ContainerImage="$IMAGE_URI" \
             CreateDynamoDB="$CREATE_DYNAMODB" \
             ClusterName="$CLUSTER_NAME" \
@@ -376,15 +382,26 @@ if [[ "$DRY_RUN" != "true" ]]; then
             ImageVersion="$(date +%s)" \
         --capabilities CAPABILITY_NAMED_IAM \
         --tags \
-            splunkit_data_classification=public \
-            splunkit_environment_type=non-prd \
-            Project=o11y-gameday
+            Project=o11y-gameday 2>&1)
+    DEPLOY_EXIT=$?
+    set -e
+
+    if [[ $DEPLOY_EXIT -ne 0 ]]; then
+        echo "$DEPLOY_OUTPUT"
+        if echo "$DEPLOY_OUTPUT" | grep -qi "already.exists\|AlreadyExists\|EntityAlreadyExists\|ResourceInUse"; then
+            echo ""
+            log_error "リソース名が競合しています。別のスタックが同名のリソースを使用している可能性があります。"
+            log_info "Use --stack-suffix <suffix> to create a uniquely named stack."
+            log_info "Example: $0 --stack-suffix event2"
+        fi
+        exit $DEPLOY_EXIT
+    fi
 
     log_info "CloudFormation stack deployed successfully"
 else
     log_info "[DRY-RUN] Would deploy stack: ${STACK_NAME}"
     log_info "[DRY-RUN] Template: ${SCRIPT_DIR}/template.yaml"
-    log_info "[DRY-RUN] Parameters: Environment=${ENVIRONMENT} ContainerImage=${IMAGE_URI} CreateDynamoDB=${CREATE_DYNAMODB}"
+    log_info "[DRY-RUN] Parameters: StackSuffix=${NAME_SUFFIX} ContainerImage=${IMAGE_URI} CreateDynamoDB=${CREATE_DYNAMODB}"
 fi
 
 # ============================================================
@@ -410,5 +427,9 @@ if [[ "$DRY_RUN" != "true" ]]; then
     log_info "Health Check:   ${ENDPOINT}/health"
     echo ""
     log_info "To delete all resources:"
-    log_info "  $0 --delete --environment ${ENVIRONMENT}"
+    if [[ -n "$STACK_SUFFIX" ]]; then
+        log_info "  $0 --delete --stack-suffix ${STACK_SUFFIX}"
+    else
+        log_info "  $0 --delete"
+    fi
 fi

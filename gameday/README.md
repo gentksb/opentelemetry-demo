@@ -14,9 +14,28 @@ OpenTelemetry DemoにFeature Flagsで障害を注入し、Splunk APM/Infrastruct
 ### AWSアカウント権限
 - CloudFormation / EC2 / ECR / ECS / DynamoDB / IAM
 
+### 組織タグの付与
+
+AWSアカウントのリソース作成において、組織固有のタグ付与が必須となる場合があります。
+
+この場合、組織のタグポリシーに従って`aws cloudformation deploy --tags` でスタックレベルタグとして付与してください。
+スタックレベルタグはスタック内の全リソースに自動伝播します。
+
+```bash
+# タグ付与例
+aws cloudformation deploy \
+  --template-file ... \
+  --tags \
+    Project=o11y-gameday \
+    data_classification=public \
+    environment_type=non-prd
+```
+
+ECRリポジトリやKubernetes namespaceなどCloudFormation外のリソースには、各自で適切にタグを付与してください。
+
 ### Splunkアカウント
 - Splunk Observability Cloud アカウント
-- (オプション) Splunk ITSI、Cisco ThousandEyes ← Q8で使用。連携している場合のみ
+- (オプション) Splunk ITSI、Cisco ThousandEyes ← Q8以降で使用。事前準備が必要です
 
 ## 事前準備（必要な情報を用意する）
 
@@ -45,8 +64,11 @@ aws cloudformation deploy \
   --parameter-overrides \
     KeyName=<EC2_KEY_PAIR> \
     SplunkAccessToken=<SPLUNK_ACCESS_TOKEN> \
-    SplunkRealm=<SPLUNK_REALM>
+    SplunkRealm=<SPLUNK_REALM> \
+  --tags Project=o11y-gameday
 ```
+
+> フォークリポジトリを使用する場合は `GitRepoUrl` と `GitBranch` パラメータで指定できます（デフォルト: `gentksb/opentelemetry-demo` の `tgen/o11y-gameday` ブランチ）。
 
 ### 2. EC2のIPアドレス・インスタンスIDを取得
 
@@ -117,7 +139,6 @@ ssh -i <EC2_KEY_PAIR>.pem ec2-user@<EC2_IP> \
 ```bash
 cd gameday/admin-app
 ./deploy-admin.sh \
-  --environment dev \
   --create-dynamodb \
   --cluster-name gameday-kind \
   --splunk-realm <SPLUNK_REALM> \
@@ -126,6 +147,9 @@ cd gameday/admin-app
 ```
 
 デプロイ完了後にECSエンドポイントが表示されます。
+
+> 同一アカウントに複数のGame Day環境をデプロイする場合は `--stack-suffix` でスタック名を分けてください：
+> `./deploy-admin.sh --stack-suffix event2 --create-dynamodb ...`
 
 ### 6. 設問変更後の管理アプリ更新
 
@@ -176,7 +200,7 @@ Feature Flag UIからも手動で変更可能です。
 ```bash
 # 管理アプリ削除（ローカルから実行）
 cd gameday/admin-app
-./deploy-admin.sh --delete --environment dev
+./deploy-admin.sh --delete
 
 # EC2 + kindスタック削除（ローカルから実行）
 aws cloudformation delete-stack --stack-name gameday-kind --region ap-northeast-1

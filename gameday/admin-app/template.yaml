@@ -3,12 +3,10 @@ Description: >
   o11y Game Day Admin App - ECS Express Mode + DynamoDB
 
 Parameters:
-  Environment:
+  StackSuffix:
     Type: String
-    Default: dev
-    AllowedValues:
-      - dev
-      - prod
+    Default: ""
+    Description: "Resource name suffix including dash (e.g. '-event1'). Empty for no suffix."
 
   ContainerImage:
     Type: String
@@ -66,7 +64,7 @@ Resources:
     Condition: ShouldCreateDynamoDB
     DeletionPolicy: Retain
     Properties:
-      TableName: !Sub gameday-teams-${Environment}
+      TableName: !Sub gameday-teams${StackSuffix}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: team_id
@@ -75,10 +73,6 @@ Resources:
         - AttributeName: team_id
           KeyType: HASH
       Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
         - Key: Project
           Value: o11y-gameday
 
@@ -87,7 +81,7 @@ Resources:
     Condition: ShouldCreateDynamoDB
     DeletionPolicy: Retain
     Properties:
-      TableName: !Sub gameday-answers-${Environment}
+      TableName: !Sub gameday-answers${StackSuffix}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: team_id
@@ -100,10 +94,6 @@ Resources:
         - AttributeName: question_id
           KeyType: RANGE
       Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
         - Key: Project
           Value: o11y-gameday
 
@@ -112,7 +102,7 @@ Resources:
     Condition: ShouldCreateDynamoDB
     DeletionPolicy: Retain
     Properties:
-      TableName: !Sub gameday-questions-${Environment}
+      TableName: !Sub gameday-questions${StackSuffix}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: question_id
@@ -121,10 +111,6 @@ Resources:
         - AttributeName: question_id
           KeyType: HASH
       Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
         - Key: Project
           Value: o11y-gameday
 
@@ -136,7 +122,7 @@ Resources:
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub gameday-admin-task-exec-${Environment}
+      RoleName: !Sub gameday-admin-task-exec${StackSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -146,17 +132,12 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-      Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
 
   # Task Role (for DynamoDB access from the application)
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub gameday-admin-task-${Environment}
+      RoleName: !Sub gameday-admin-task${StackSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -178,20 +159,15 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:Scan
                 Resource:
-                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-teams-${Environment}
-                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-answers-${Environment}
-                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-questions-${Environment}
-      Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-teams${StackSuffix}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-answers${StackSuffix}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-questions${StackSuffix}
 
   # Infrastructure Role (Express Mode: manages ALB, SG, ACM, auto-scaling)
   InfrastructureRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub gameday-admin-infra-${Environment}
+      RoleName: !Sub gameday-admin-infra${StackSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -202,11 +178,6 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices
-      Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
 
   # ============================================================
   # ECS Express Gateway Service
@@ -218,7 +189,7 @@ Resources:
       - InfrastructureRole
       - TaskRole
     Properties:
-      ServiceName: !Sub gameday-admin-${Environment}
+      ServiceName: !Sub gameday-admin${StackSuffix}
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
       InfrastructureRoleArn: !GetAtt InfrastructureRole.Arn
       TaskRoleArn: !GetAtt TaskRole.Arn
@@ -236,11 +207,11 @@ Resources:
           - Name: AWS_REGION
             Value: !Ref AWS::Region
           - Name: TEAMS_TABLE
-            Value: !Sub gameday-teams-${Environment}
+            Value: !Sub gameday-teams${StackSuffix}
           - Name: ANSWERS_TABLE
-            Value: !Sub gameday-answers-${Environment}
+            Value: !Sub gameday-answers${StackSuffix}
           - Name: QUESTIONS_TABLE
-            Value: !Sub gameday-questions-${Environment}
+            Value: !Sub gameday-questions${StackSuffix}
           - Name: CLUSTER_NAME
             Value: !Ref ClusterName
           - Name: SPLUNK_REALM
@@ -261,10 +232,6 @@ Resources:
         AutoScalingMetric: AVERAGE_CPU
         AutoScalingTargetValue: 70
       Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
         - Key: Project
           Value: o11y-gameday
 
@@ -272,15 +239,15 @@ Outputs:
   # DynamoDB
   TeamsTableName:
     Description: DynamoDB Teams Table Name
-    Value: !Sub gameday-teams-${Environment}
+    Value: !Sub gameday-teams${StackSuffix}
 
   AnswersTableName:
     Description: DynamoDB Answers Table Name
-    Value: !Sub gameday-answers-${Environment}
+    Value: !Sub gameday-answers${StackSuffix}
 
   QuestionsTableName:
     Description: DynamoDB Questions Table Name
-    Value: !Sub gameday-questions-${Environment}
+    Value: !Sub gameday-questions${StackSuffix}
 
   # ECS Express Mode
   ServiceArn:

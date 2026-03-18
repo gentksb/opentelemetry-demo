@@ -9,7 +9,7 @@
 
 ## 技術スタック
 
-- **リポジトリ**: splunk/opentelemetry-demo（Kubernetesデプロイ専用）
+- **リポジトリ**: gentksb/opentelemetry-demo（Cfnパラメータ `GitRepoUrl` で変更可能）
 - **インフラ**: kind on AWS EC2（CloudFormationで構築）
 - **IaC**: AWS CloudFormation
 - **管理アプリ**: Express.js(Backend) + Vite/Preact(Frontend) + DynamoDB
@@ -22,7 +22,7 @@
 CloudFormationで EC2インスタンスとkindクラスタを構築する。
 UserDataがkindクラスタのセットアップ・リポジトリクローンを自動実行する（約5〜10分）。
 
-**有効なパラメータ**: `KeyName`, `SplunkAccessToken`, `SplunkRealm`, `InstanceType`, `AllowedSSHCidr`
+**有効なパラメータ**: `KeyName`, `SplunkAccessToken`, `SplunkRealm`, `InstanceType`, `AllowedSSHCidr`, `GitRepoUrl`, `GitBranch`
 
 ```bash
 aws cloudformation deploy \
@@ -33,7 +33,8 @@ aws cloudformation deploy \
     KeyName=<KEY_PAIR> \
     SplunkAccessToken=<TOKEN> \
     SplunkRealm=jp0 \
-  --capabilities CAPABILITY_NAMED_IAM
+  --capabilities CAPABILITY_NAMED_IAM \
+  --tags Project=o11y-gameday
 ```
 
 ### アプリケーションのデプロイ
@@ -70,7 +71,6 @@ aws cloudformation delete-stack --stack-name gameday-kind --region ap-northeast-
 ```bash
 cd gameday/admin-app
 ./deploy-admin.sh \
-  --environment dev \
   --create-dynamodb \
   --cluster-name gameday-kind \
   --splunk-realm jp0 \
@@ -85,14 +85,14 @@ cd gameday/admin-app
 ```bash
 cd gameday/admin-app
 ./update-image.sh
-# オプション: --stack-name gameday-admin-dev --region ap-northeast-1
+# オプション: --stack-name gameday-admin --region ap-northeast-1
 ```
 
 ### 管理アプリの削除
 
 ```bash
 cd gameday/admin-app
-./deploy-admin.sh --delete --environment dev
+./deploy-admin.sh --delete
 ```
 
 ## 設問（scoring.ts）
@@ -109,6 +109,11 @@ cd gameday/admin-app
 
 Q8（ThousandEyes）,Q9(Sytheticsテストによるデータ投入) , Q10(ITSI)はデフォルトでコメントアウト済み。
 ITSIとThousandEyes連携を実施した場合のみ、`scoring.ts` のコメントアウトを解除して `./update-image.sh` を実行する。
+
+## タグ運用
+
+CloudFormationテンプレートにはプロジェクトタグ (`Project=o11y-gameday`) のみ定義しています。
+組織固有のタグ（`splunkit_*` 等）は `aws cloudformation deploy --tags` でスタックレベルタグとして付与してください。
 
 ## docs
 

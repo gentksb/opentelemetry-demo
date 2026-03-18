@@ -302,8 +302,6 @@ fi
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | \
     kubectl label --local -f - \
         project=o11y-gameday \
-        splunkit_data_classification=public \
-        splunkit_environment_type=non-prd \
         --overwrite -o yaml | \
     kubectl apply -f -
 

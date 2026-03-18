@@ -32,6 +32,16 @@ Parameters:
     Default: jp0
     Description: Splunk realm
 
+  GitRepoUrl:
+    Type: String
+    Default: https://github.com/gentksb/opentelemetry-demo.git
+    Description: Git repository URL to clone on EC2 instance
+
+  GitBranch:
+    Type: String
+    Default: tgen/o11y-gameday
+    Description: Git branch to checkout
+
 Mappings:
   RegionAMI:
     ap-northeast-1:
@@ -51,10 +61,6 @@ Resources:
       Tags:
         - Key: Name
           Value: gameday-kind-vpc
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -62,10 +68,6 @@ Resources:
       Tags:
         - Key: Name
           Value: gameday-kind-igw
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -83,10 +85,6 @@ Resources:
       Tags:
         - Key: Name
           Value: gameday-kind-public-subnet
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -95,10 +93,6 @@ Resources:
       Tags:
         - Key: Name
           Value: gameday-kind-public-rt
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -146,10 +140,6 @@ Resources:
       Tags:
         - Key: Name
           Value: gameday-kind-sg
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
 
   InstanceRole:
     Type: AWS::IAM::Role
@@ -164,11 +154,6 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -264,9 +249,8 @@ Resources:
           chown ec2-user:ec2-user /home/ec2-user/splunk-config.env
 
           # Clone repository for deploy scripts
-          # Note: gameday/ directory is on the tgen/o11y-gameday branch
-          sudo -u ec2-user git clone -b tgen/o11y-gameday https://github.com/splunk/opentelemetry-demo.git /home/ec2-user/opentelemetry-demo || \
-            sudo -u ec2-user git clone https://github.com/splunk/opentelemetry-demo.git /home/ec2-user/opentelemetry-demo || true
+          sudo -u ec2-user git clone -b ${GitBranch} ${GitRepoUrl} /home/ec2-user/opentelemetry-demo || \
+            sudo -u ec2-user git clone ${GitRepoUrl} /home/ec2-user/opentelemetry-demo || true
 
           echo "=== Game Day setup complete ==="
           echo "To deploy via SSM or SSH:"
@@ -274,10 +258,6 @@ Resources:
       Tags:
         - Key: Name
           Value: gameday-kind-instance
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
 
 Outputs:
   InstanceId:

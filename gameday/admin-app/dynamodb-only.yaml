@@ -3,18 +3,16 @@ Description: >
   o11y Game Day Admin App - DynamoDB tables only (for local development)
 
 Parameters:
-  Environment:
+  StackSuffix:
     Type: String
-    Default: dev
-    AllowedValues:
-      - dev
-      - prod
+    Default: ""
+    Description: "Resource name suffix including dash (e.g. '-event1'). Empty for no suffix."
 
 Resources:
   TeamsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub gameday-teams-${Environment}
+      TableName: !Sub gameday-teams${StackSuffix}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: team_id
@@ -23,17 +21,13 @@ Resources:
         - AttributeName: team_id
           KeyType: HASH
       Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
         - Key: Project
           Value: o11y-gameday
 
   AnswersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub gameday-answers-${Environment}
+      TableName: !Sub gameday-answers${StackSuffix}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: team_id
@@ -46,17 +40,13 @@ Resources:
         - AttributeName: question_id
           KeyType: RANGE
       Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
         - Key: Project
           Value: o11y-gameday
 
   QuestionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub gameday-questions-${Environment}
+      TableName: !Sub gameday-questions${StackSuffix}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: question_id
@@ -65,10 +55,6 @@ Resources:
         - AttributeName: question_id
           KeyType: HASH
       Tags:
-        - Key: splunkit_data_classification
-          Value: public
-        - Key: splunkit_environment_type
-          Value: non-prd
         - Key: Project
           Value: o11y-gameday
 
