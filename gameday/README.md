@@ -30,12 +30,12 @@ aws cloudformation deploy \
     environment_type=non-prd
 ```
 
-**管理アプリ**: ECS Express Modeが内部で作成するリソース（ALB・Security Group等）にはスタックレベルタグが伝播しません。`deploy-admin.sh` の `--tags` オプションで組織タグを渡してください。このオプションはスタックレベルタグとECS Express Mode内部リソースの両方にタグを適用します。
+**管理アプリ**: ECS Express Modeが内部で作成するリソース（ALB・Security Group等）にはスタックレベルタグが伝播しません。`deploy-admin.sh` の `--tags` オプションで組織タグを渡してください。このオプションはスタックレベルタグとECS Express Mode内部リソースの両方にタグを適用します。なお、内部リソースへ伝播できるタグは最大2つです。3つ目以降はスタックレベルのみの付与となります。
 
 ```bash
-# タグ付与例（管理アプリ）
+# タグ付与例（管理アプリ）- スペース区切りで指定
 ./deploy-admin.sh \
-  --tags data_classification=public,environment_type=non-prd \
+  --tags data_classification=public environment_type=non-prd \
   ...
 ```
 

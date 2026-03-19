@@ -293,11 +293,17 @@ log_step "Step 1: Ensuring ECR repository exists..."
 if [[ "$DRY_RUN" != "true" ]]; then
     if ! aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" --region "$REGION" &>/dev/null; then
         log_info "Creating ECR repository: ${ECR_REPO_NAME}"
+        ECR_TAGS="Key=Project,Value=o11y-gameday"
+        for PAIR in "${USER_TAGS[@]}"; do
+            KEY="${PAIR%%=*}"
+            VALUE="${PAIR#*=}"
+            ECR_TAGS="${ECR_TAGS} Key=${KEY},Value=${VALUE}"
+        done
         aws ecr create-repository \
             --repository-name "$ECR_REPO_NAME" \
             --region "$REGION" \
             --image-scanning-configuration scanOnPush=true \
-            --tags Key=Project,Value=o11y-gameday \
+            --tags $ECR_TAGS \
             --output text --query 'repository.repositoryUri'
     else
         log_info "ECR repository already exists"

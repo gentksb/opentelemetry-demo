@@ -97,6 +97,16 @@ Resources:
       Tags:
         - Key: Project
           Value: o11y-gameday
+        - !If
+          - HasOrgTag1
+          - Key: !Ref OrgTag1Key
+            Value: !Ref OrgTag1Value
+          - !Ref AWS::NoValue
+        - !If
+          - HasOrgTag2
+          - Key: !Ref OrgTag2Key
+            Value: !Ref OrgTag2Value
+          - !Ref AWS::NoValue
 
   AnswersTable:
     Type: AWS::DynamoDB::Table
@@ -118,6 +128,16 @@ Resources:
       Tags:
         - Key: Project
           Value: o11y-gameday
+        - !If
+          - HasOrgTag1
+          - Key: !Ref OrgTag1Key
+            Value: !Ref OrgTag1Value
+          - !Ref AWS::NoValue
+        - !If
+          - HasOrgTag2
+          - Key: !Ref OrgTag2Key
+            Value: !Ref OrgTag2Value
+          - !Ref AWS::NoValue
 
   QuestionsTable:
     Type: AWS::DynamoDB::Table
@@ -135,6 +155,16 @@ Resources:
       Tags:
         - Key: Project
           Value: o11y-gameday
+        - !If
+          - HasOrgTag1
+          - Key: !Ref OrgTag1Key
+            Value: !Ref OrgTag1Value
+          - !Ref AWS::NoValue
+        - !If
+          - HasOrgTag2
+          - Key: !Ref OrgTag2Key
+            Value: !Ref OrgTag2Value
+          - !Ref AWS::NoValue
 
   SettingsTable:
     Type: AWS::DynamoDB::Table
@@ -152,6 +182,16 @@ Resources:
       Tags:
         - Key: Project
           Value: o11y-gameday
+        - !If
+          - HasOrgTag1
+          - Key: !Ref OrgTag1Key
+            Value: !Ref OrgTag1Value
+          - !Ref AWS::NoValue
+        - !If
+          - HasOrgTag2
+          - Key: !Ref OrgTag2Key
+            Value: !Ref OrgTag2Value
+          - !Ref AWS::NoValue
 
   # ============================================================
   # IAM Roles
@@ -171,6 +211,19 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Project
+          Value: o11y-gameday
+        - !If
+          - HasOrgTag1
+          - Key: !Ref OrgTag1Key
+            Value: !Ref OrgTag1Value
+          - !Ref AWS::NoValue
+        - !If
+          - HasOrgTag2
+          - Key: !Ref OrgTag2Key
+            Value: !Ref OrgTag2Value
+          - !Ref AWS::NoValue
 
   # Task Role (for DynamoDB access from the application)
   TaskRole:
@@ -202,6 +255,19 @@ Resources:
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-answers${StackSuffix}
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-questions${StackSuffix}
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameday-settings${StackSuffix}
+      Tags:
+        - Key: Project
+          Value: o11y-gameday
+        - !If
+          - HasOrgTag1
+          - Key: !Ref OrgTag1Key
+            Value: !Ref OrgTag1Value
+          - !Ref AWS::NoValue
+        - !If
+          - HasOrgTag2
+          - Key: !Ref OrgTag2Key
+            Value: !Ref OrgTag2Value
+          - !Ref AWS::NoValue
 
   # Infrastructure Role (Express Mode: manages ALB, SG, ACM, auto-scaling)
   InfrastructureRole:
@@ -218,6 +284,19 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices
+      Tags:
+        - Key: Project
+          Value: o11y-gameday
+        - !If
+          - HasOrgTag1
+          - Key: !Ref OrgTag1Key
+            Value: !Ref OrgTag1Value
+          - !Ref AWS::NoValue
+        - !If
+          - HasOrgTag2
+          - Key: !Ref OrgTag2Key
+            Value: !Ref OrgTag2Value
+          - !Ref AWS::NoValue
 
   # ============================================================
   # ECS Express Gateway Service
