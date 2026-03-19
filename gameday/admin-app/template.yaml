@@ -212,6 +212,13 @@ Resources:
       Principal: "*"
       FunctionUrlAuthType: NONE
 
+  FunctionInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AdminAppFunction
+      Action: lambda:InvokeFunction
+      Principal: "*"
+
 Outputs:
   # DynamoDB
   TeamsTableName:
