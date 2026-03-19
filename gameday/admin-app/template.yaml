@@ -181,7 +181,6 @@ Resources:
         Variables:
           NODE_ENV: production
           PORT: "3000"
-          AWS_REGION: !Ref AWS::Region
           TEAMS_TABLE: !Sub gameday-teams${StackSuffix}
           ANSWERS_TABLE: !Sub gameday-answers${StackSuffix}
           QUESTIONS_TABLE: !Sub gameday-questions${StackSuffix}
