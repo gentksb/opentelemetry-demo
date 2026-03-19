@@ -1,11 +1,11 @@
 #!/bin/bash
 #
-# deploy-admin.sh - Deploy o11y Game Day Admin App via ECS Express Mode
+# deploy-admin.sh - Deploy o11y Game Day Admin App via Lambda (Lambda Web Adapter)
 #
 # Usage: ./deploy-admin.sh [OPTIONS]
 #
 # This script builds the Docker image, pushes it to ECR, and deploys the
-# admin app using CloudFormation (ECS Express Mode + DynamoDB).
+# admin app using CloudFormation (Lambda Function URL + DynamoDB).
 #
 
 set -e
@@ -37,7 +37,7 @@ print_usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
 
-Deploy the o11y Game Day Admin App to AWS (ECS Express Mode).
+Deploy the o11y Game Day Admin App to AWS (Lambda Function URL).
 
 Options:
   --region REGION        AWS region (default: ap-northeast-1)
@@ -48,8 +48,7 @@ Options:
   --create-dynamodb      Create DynamoDB tables (skip if already exist in another stack)
   --splunk-access-token  Splunk access token for APM/Metrics ingest
   --rum-token            Splunk RUM token for browser RUM (baked into frontend at build time)
-  --tags K=V [K=V]  Organization tags for SCP compliance (up to 2, same format as CFn --tags)
-                         Applied to ECS Express Mode managed resources (ALB, SG, etc.)
+  --tags K=V [K=V]       Stack-level tags for SCP compliance (same format as aws cloudformation deploy --tags)
   --skip-build           Skip Docker build and ECR push (use existing image)
   --dry-run              Show what would be deployed without deploying
   --delete               Delete the stack and ECR repository
@@ -59,8 +58,8 @@ Examples:
   # Full deploy (build + push + CloudFormation)
   $0 --create-dynamodb --admin-password secret123
 
-  # With organization tags (same format as aws cloudformation deploy --tags)
-  $0 --create-dynamodb --admin-password secret123 --tags data_classification=public environment_type=non-prd
+  # With stack-level tags
+  $0 --create-dynamodb --admin-password secret123 --tags splunkit_data_classification=public splunkit_environment_type=non-prd
 
   # Deploy a second instance with suffix
   $0 --stack-suffix event2 --create-dynamodb
@@ -327,6 +326,8 @@ if [[ "$SKIP_BUILD" != "true" ]]; then
         log_info "Building Docker image..."
         APP_VERSION=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "dev")
         docker build \
+            --platform linux/amd64 \
+            --provenance=false \
             --build-arg SPLUNK_RUM_TOKEN="$SPLUNK_RUM_TOKEN" \
             --build-arg SPLUNK_REALM="$SPLUNK_REALM" \
             --build-arg APP_VERSION="$APP_VERSION" \
@@ -385,24 +386,11 @@ fi
 if [[ "$DRY_RUN" != "true" ]]; then
     APP_VERSION=${APP_VERSION:-$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "dev")}
 
-    # Parse --tags into CFn parameter overrides and stack-level tags
-    # Format: same as aws cloudformation deploy --tags (space-separated Key=Value pairs)
-    ORG_TAG_PARAMS=()
+    # Build stack-level tags
     STACK_TAGS=("Project=o11y-gameday")
-    if [[ ${#USER_TAGS[@]} -gt 0 ]]; then
-        TAG_INDEX=0
-        for PAIR in "${USER_TAGS[@]}"; do
-            KEY="${PAIR%%=*}"
-            VALUE="${PAIR#*=}"
-            STACK_TAGS+=("${PAIR}")
-            TAG_INDEX=$((TAG_INDEX + 1))
-            if [[ $TAG_INDEX -le 2 ]]; then
-                ORG_TAG_PARAMS+=("OrgTag${TAG_INDEX}Key=${KEY}" "OrgTag${TAG_INDEX}Value=${VALUE}")
-            else
-                log_warn "Only up to 2 org tags are supported for Express Mode propagation. Extra tag '${KEY}' applied as stack-level tag only."
-            fi
-        done
-    fi
+    for PAIR in "${USER_TAGS[@]}"; do
+        STACK_TAGS+=("${PAIR}")
+    done
 
     set +e
     DEPLOY_OUTPUT=$(aws cloudformation deploy \
@@ -418,8 +406,6 @@ if [[ "$DRY_RUN" != "true" ]]; then
             "$ADMIN_PASSWORD_PARAM" \
             "$SPLUNK_ACCESS_TOKEN_PARAM" \
             AppVersion="$APP_VERSION" \
-            ImageVersion="$(date +%s)" \
-            "${ORG_TAG_PARAMS[@]}" \
         --capabilities CAPABILITY_NAMED_IAM \
         --tags \
             "${STACK_TAGS[@]}" 2>&1)
@@ -456,8 +442,9 @@ if [[ "$DRY_RUN" != "true" ]]; then
     ENDPOINT=$(aws cloudformation describe-stacks \
         --stack-name "$STACK_NAME" \
         --region "$REGION" \
-        --query "Stacks[0].Outputs[?OutputKey=='ServiceEndpoint'].OutputValue" \
+        --query "Stacks[0].Outputs[?OutputKey=='FunctionUrl'].OutputValue" \
         --output text 2>/dev/null || echo "pending")
+    ENDPOINT="${ENDPOINT%/}"
 
     log_info "=== Deployment Complete ==="
     echo ""
