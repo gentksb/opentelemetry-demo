@@ -444,6 +444,7 @@ if [[ "$DRY_RUN" != "true" ]]; then
         --region "$REGION" \
         --query "Stacks[0].Outputs[?OutputKey=='FunctionUrl'].OutputValue" \
         --output text 2>/dev/null || echo "pending")
+    ENDPOINT="${ENDPOINT%/}"
 
     log_info "=== Deployment Complete ==="
     echo ""

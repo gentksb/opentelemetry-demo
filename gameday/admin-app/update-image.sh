@@ -123,6 +123,7 @@ ENDPOINT=$(aws cloudformation describe-stacks \
     --region "$REGION" \
     --query "Stacks[0].Outputs[?OutputKey=='FunctionUrl'].OutputValue" \
     --output text 2>/dev/null || echo "pending")
+ENDPOINT="${ENDPOINT%/}"
 
 echo ""
 echo "=== Update Complete ==="
