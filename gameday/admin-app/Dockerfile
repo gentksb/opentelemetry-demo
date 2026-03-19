@@ -43,7 +43,7 @@ RUN npm ci --omit=dev
 COPY --from=backend-builder /app/dist ./dist
 COPY --from=frontend-builder /app/frontend/dist ./public
 
-COPY --from=public.ecr.aws/awslabs/aws-lambda-web-adapter:0.9.0 /lambda-adapter /opt/extensions/lambda-adapter
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.0.0-rc1 /lambda-adapter /opt/extensions/lambda-adapter
 
 EXPOSE 3000
 
