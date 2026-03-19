@@ -231,5 +231,4 @@ bash /home/ec2-user/opentelemetry-demo/gameday/infra/cleanup-teams.sh --force
 | Feature Flagが動作しない | `kubectl logs -n otel-demo deployment/flagd` |
 | `/admin` にログインできない | `deploy-admin.sh --admin-password <PASSWORD>` で再デプロイ |
 | スコアボードAPIが500エラー | `aws dynamodb list-tables` でテーブル存在確認。`--create-dynamodb` 付きで再デプロイ |
-| 管理アプリが403を返す | Lambda コンソールで関数 URL の認証タイプが「なし」かつ `lambda:InvokeFunction` と `lambda:InvokeFunctionUrl` のパブリック許可が付与されているか確認 |
 | 管理アプリ削除後にDynamoDBテーブルが残る | `DeletionPolicy: Retain` によりテーブルは保持される。`deploy-admin.sh --delete` で対話的に削除可能 |
