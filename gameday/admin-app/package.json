@@ -15,7 +15,7 @@
     "@aws-sdk/client-dynamodb": "^3.500.0",
     "@aws-sdk/lib-dynamodb": "^3.500.0",
     "@hono/node-server": "^1.19.11",
-    "@splunk/otel": "^3.3.0",
+    "@splunk/otel": "^4.4.0",
     "dotenv": "^16.4.0",
     "hono": "^4.12.8",
     "uuid": "^9.0.0"

@@ -1,4 +1,4 @@
-ARG NODE_IMAGE="node:24-alpine"
+ARG NODE_IMAGE="node:24-slim"
 
 FROM ${NODE_IMAGE} AS frontend-builder
 
