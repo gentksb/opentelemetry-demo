@@ -17,7 +17,14 @@ app.get('/admin', serveStatic({ root: './public', path: 'admin.html' }));
 app.use('/*', serveStatic({ root: './public' }));
 
 serve({ fetch: app.fetch, port: PORT }, () => {
-  console.log(`Game Day Admin Server running on port ${PORT}`);
-  console.log(`Team UI: http://localhost:${PORT}/`);
-  console.log(`Admin UI: http://localhost:${PORT}/admin`);
+  console.log(`Game Day Admin Server (backend) running on port ${PORT}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Frontend dev server (Vite): http://localhost:5173/`);
+    console.log(`  Team UI:  http://localhost:5173/`);
+    console.log(`  Admin UI: http://localhost:5173/admin`);
+    console.log(`Backend API: http://localhost:${PORT}/api/...`);
+  } else {
+    console.log(`Team UI:  http://localhost:${PORT}/`);
+    console.log(`Admin UI: http://localhost:${PORT}/admin`);
+  }
 });

@@ -125,3 +125,64 @@ CloudFormationテンプレートにはプロジェクトタグ (`Project=o11y-ga
 ### デプロイ済み環境情報（Git追跡無し）
 
 @gameday/deployed-env.md
+
+## Gameday Admin App
+
+`gameday/admin-app/` にあるGameday用の管理・チーム回答アプリケーション。
+
+### 技術スタック
+- **バックエンド**: Hono + TypeScript + AWS SDK (DynamoDB)
+- **フロントエンド**: Preact + SWR + Vite（マルチページ: team + admin）
+- **デプロイ**: Docker (マルチステージビルド) → ECR → ECS (CloudFormation)
+
+### ローカル開発セットアップ（初回）
+
+```bash
+# 1. 環境変数ファイルを作成（.env.example を参照）
+#    gameday/admin-app/.env に以下を設定:
+#      DYNAMODB_ENDPOINT=http://localhost:8000
+#      AWS_REGION=ap-northeast-1
+#      ADMIN_PASSWORD=admin
+#      CLUSTER_NAME=gameday-kind
+#      SPLUNK_REALM=jp0
+
+# 2. DynamoDB Local を起動
+cd gameday/admin-app && docker compose -f docker-compose.dev.yml up -d
+
+# 3. DynamoDB Localにテーブルを作成（初回のみ）
+cd gameday/admin-app && bash scripts/setup-dynamodb-local.sh
+
+# 4. 依存関係インストール
+cd gameday/admin-app && npm install
+cd gameday/admin-app/frontend && npm install
+```
+
+### 開発サーバー起動（同時起動）
+
+```bash
+# バックエンド(:3000) + フロントエンド(:5173) を同時起動
+cd gameday/admin-app && npm run dev:all
+```
+
+アクセス先：
+- チーム回答ページ: http://localhost:5173/
+- 管理画面: http://localhost:5173/admin
+- バックエンドAPI直接: http://localhost:3000/api/...
+
+### 開発コマンド（個別）
+
+```bash
+# バックエンドのみ
+cd gameday/admin-app && npm run dev
+
+# フロントエンドのみ（APIは localhost:3000 にプロキシ）
+cd gameday/admin-app/frontend && npm run dev
+
+# 型チェック
+cd gameday/admin-app && npx tsc --noEmit
+cd gameday/admin-app/frontend && npx tsc --noEmit
+
+# ビルド・デプロイ
+cd gameday/admin-app && docker build -t gameday-admin .
+cd gameday/admin-app && ./update-image.sh
+```

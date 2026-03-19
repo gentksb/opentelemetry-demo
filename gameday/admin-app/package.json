@@ -7,6 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn src/index.ts",
+    "dev:all": "concurrently --names backend,frontend --prefix-colors cyan,green \"npm run dev\" \"npm --prefix frontend run dev\"",
     "lint": "eslint src/**/*.ts",
     "test": "jest"
   },
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/uuid": "^9.0.7",
+    "concurrently": "^9.2.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3"
   },
