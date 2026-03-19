@@ -81,6 +81,7 @@ APP_VERSION=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "d
 SPLUNK_REALM_BUILD=$(get_param SplunkRealm)
 CLUSTER_NAME_BUILD=$(get_param ClusterName)
 docker build \
+    --platform linux/amd64 \
     --build-arg SPLUNK_RUM_TOKEN="$SPLUNK_RUM_TOKEN" \
     --build-arg SPLUNK_REALM="$SPLUNK_REALM_BUILD" \
     --build-arg APP_VERSION="$APP_VERSION" \
