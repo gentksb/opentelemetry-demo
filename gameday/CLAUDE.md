@@ -12,7 +12,7 @@
 - **リポジトリ**: gentksb/opentelemetry-demo（Cfnパラメータ `GitRepoUrl` で変更可能）
 - **インフラ**: kind on AWS EC2（CloudFormationで構築）
 - **IaC**: AWS CloudFormation
-- **管理アプリ**: Express.js(Backend) + Vite/Preact(Frontend) + DynamoDB
+- **管理アプリ**: Hono(Backend) + Vite/Preact(Frontend) + DynamoDB
 - **リージョン**: ap-northeast-1 (東京)
 
 ## インフラデプロイ
@@ -66,7 +66,7 @@ aws cloudformation delete-stack --stack-name gameday-kind --region ap-northeast-
 
 ### 初回デプロイ
 
-ローカルから実行。DynamoDBテーブルとECS Fargate サービスを作成する。
+ローカルから実行。DynamoDB テーブルと Lambda Function URL を作成する。
 
 ```bash
 cd gameday/admin-app
@@ -114,7 +114,7 @@ ITSIとThousandEyes連携を実施した場合のみ、`scoring.ts` のコメン
 
 CloudFormationテンプレートにはプロジェクトタグ (`Project=o11y-gameday`) のみ定義しています。
 組織固有のタグは `aws cloudformation deploy --tags` でスタックレベルタグとして付与してください。
-管理アプリ (ECS Express Mode) は `deploy-admin.sh --tags` で渡すことで内部リソース（ALB等）にもタグが伝播します。
+管理アプリは `deploy-admin.sh --tags` で渡したタグがスタックレベルタグとして適用されます（Lambda は内部で ALB 等を作成しないため、スタックレベルタグのみで SCP 要件を満たします）。
 
 ## docs
 
@@ -124,7 +124,7 @@ CloudFormationテンプレートにはプロジェクトタグ (`Project=o11y-ga
 
 ### デプロイ済み環境情報（Git追跡無し）
 
-@gameday/deployed-env.md
+`gameday/deployed-env.md`（`.gitignore` 対象）に記録する。機密情報（パスワード等）を含む場合は git 管理しないこと。
 
 ## Gameday Admin App
 
@@ -133,7 +133,7 @@ CloudFormationテンプレートにはプロジェクトタグ (`Project=o11y-ga
 ### 技術スタック
 - **バックエンド**: Hono + TypeScript + AWS SDK (DynamoDB)
 - **フロントエンド**: Preact + SWR + Vite（マルチページ: team + admin）
-- **デプロイ**: Docker (マルチステージビルド) → ECR → ECS (CloudFormation)
+- **デプロイ**: Docker (マルチステージビルド) → ECR → Lambda Function URL (CloudFormation)
 
 ### ローカル開発セットアップ（初回）
 

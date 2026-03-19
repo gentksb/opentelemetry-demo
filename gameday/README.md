@@ -12,7 +12,7 @@ OpenTelemetry DemoにFeature Flagsで障害を注入し、Splunk APM/Infrastruct
 - EC2 KeyPair（事前にAWSコンソールで作成済み）
 
 ### AWSアカウント権限
-- CloudFormation / EC2 / ECR / ECS / DynamoDB / IAM / Elastic Load Balancing / CloudWatch Logs / SSM
+- CloudFormation / EC2 / ECR / Lambda / DynamoDB / IAM / CloudWatch Logs / SSM
 
 ### 組織タグの付与
 
@@ -30,12 +30,12 @@ aws cloudformation deploy \
     environment_type=non-prd
 ```
 
-**管理アプリ**: ECS Express Modeが内部で作成するリソース（ALB・Security Group等）にはスタックレベルタグが伝播しません。`deploy-admin.sh` の `--tags` オプションで組織タグを渡してください。このオプションはスタックレベルタグとECS Express Mode内部リソースの両方にタグを適用します。なお、内部リソースへ伝播できるタグは最大2つです。3つ目以降はスタックレベルのみの付与となります。
+**管理アプリ**: `deploy-admin.sh` の `--tags` オプションで渡したタグはスタックレベルタグとして適用されます。Lambda は内部で ALB 等を作成しないため、スタックレベルタグのみで SCP 要件を満たします。
 
 ```bash
 # タグ付与例（管理アプリ）- スペース区切りで指定
 ./deploy-admin.sh \
-  --tags data_classification=public environment_type=non-prd \
+  --tags splunkit_data_classification=public splunkit_environment_type=non-prd \
   ...
 ```
 
@@ -155,7 +155,7 @@ cd gameday/admin-app
   --admin-password <ADMIN_PASSWORD>
 ```
 
-デプロイ完了後にECSエンドポイントが表示されます。
+デプロイ完了後に Lambda Function URL が表示されます。
 
 > 同一アカウントに複数のGame Day環境をデプロイする場合は `--stack-suffix` でスタック名を分けてください：
 > `./deploy-admin.sh --stack-suffix event2 --create-dynamodb ...`
@@ -175,8 +175,8 @@ cd gameday/admin-app
 |---------|-----|
 | フロントエンド | `http://<EC2_IP>:8080` |
 | Feature Flag UI | `http://<EC2_IP>:8080/feature/` |
-| 管理アプリ（参加者） | `https://<ECS_ENDPOINT>` |
-| 管理アプリ（運営） | `https://<ECS_ENDPOINT>/admin` |
+| 管理アプリ（参加者） | `https://<LAMBDA_URL>` |
+| 管理アプリ（運営） | `https://<LAMBDA_URL>/admin` |
 
 ## ゲーム設問
 
@@ -231,5 +231,5 @@ bash /home/ec2-user/opentelemetry-demo/gameday/infra/cleanup-teams.sh --force
 | Feature Flagが動作しない | `kubectl logs -n otel-demo deployment/flagd` |
 | `/admin` にログインできない | `deploy-admin.sh --admin-password <PASSWORD>` で再デプロイ |
 | スコアボードAPIが500エラー | `aws dynamodb list-tables` でテーブル存在確認。`--create-dynamodb` 付きで再デプロイ |
-| 管理アプリのALB作成がSCPで拒否される | `--tags` で組織タグを渡して再デプロイ。詳細は「組織タグの付与」セクション参照 |
+| 管理アプリが403を返す | Lambda コンソールで関数 URL の認証タイプが「なし」かつ `lambda:InvokeFunction` と `lambda:InvokeFunctionUrl` のパブリック許可が付与されているか確認 |
 | 管理アプリ削除後にDynamoDBテーブルが残る | `DeletionPolicy: Retain` によりテーブルは保持される。`deploy-admin.sh --delete` で対話的に削除可能 |
