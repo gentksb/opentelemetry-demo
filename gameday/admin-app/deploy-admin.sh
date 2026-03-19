@@ -327,6 +327,7 @@ if [[ "$SKIP_BUILD" != "true" ]]; then
         APP_VERSION=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "dev")
         docker build \
             --platform linux/amd64 \
+            --provenance=false \
             --build-arg SPLUNK_RUM_TOKEN="$SPLUNK_RUM_TOKEN" \
             --build-arg SPLUNK_REALM="$SPLUNK_REALM" \
             --build-arg APP_VERSION="$APP_VERSION" \
