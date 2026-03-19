@@ -1,4 +1,6 @@
-FROM node:20-alpine AS frontend-builder
+ARG NODE_IMAGE="node:24-alpine"
+
+FROM ${NODE_IMAGE} AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -12,14 +14,14 @@ ARG SPLUNK_RUM_TOKEN=""
 ARG SPLUNK_REALM="jp0"
 ARG APP_VERSION="dev"
 ARG DEPLOYMENT_ENV=""
-ENV VITE_SPLUNK_RUM_TOKEN=$SPLUNK_RUM_TOKEN \
+
+RUN VITE_SPLUNK_RUM_TOKEN=$SPLUNK_RUM_TOKEN \
     VITE_SPLUNK_REALM=$SPLUNK_REALM \
     VITE_APP_VERSION=$APP_VERSION \
-    VITE_DEPLOYMENT_ENV=$DEPLOYMENT_ENV
+    VITE_DEPLOYMENT_ENV=$DEPLOYMENT_ENV \
+    npm run build
 
-RUN npm run build
-
-FROM node:20-alpine AS backend-builder
+FROM ${NODE_IMAGE} AS backend-builder
 
 WORKDIR /app
 
@@ -31,12 +33,12 @@ COPY src ./src
 
 RUN npm run build
 
-FROM node:20-alpine
+FROM ${NODE_IMAGE} AS runtime
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 COPY --from=backend-builder /app/dist ./dist
 COPY --from=frontend-builder /app/frontend/dist ./public
