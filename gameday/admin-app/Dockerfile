@@ -43,9 +43,12 @@ RUN npm ci --omit=dev
 COPY --from=backend-builder /app/dist ./dist
 COPY --from=frontend-builder /app/frontend/dist ./public
 
+COPY --from=public.ecr.aws/awslabs/aws-lambda-web-adapter:0.9.0 /lambda-adapter /opt/extensions/lambda-adapter
+
 EXPOSE 3000
 
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--require @splunk/otel/instrument"
+ENV AWS_LWA_PORT=3000
 
 CMD ["node", "dist/index.js"]

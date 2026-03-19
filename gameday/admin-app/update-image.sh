@@ -4,8 +4,8 @@
 #
 # Usage: ./update-image.sh [--stack-name NAME] [--region REGION]
 #
-# This script builds the Docker image, pushes it to ECR, and forces
-# a new ECS deployment to pick up the updated image.
+# This script builds the Docker image, pushes it to ECR, and updates
+# the Lambda function to pick up the updated image.
 #
 
 set -e
@@ -92,8 +92,8 @@ echo "[3/4] Pushing to ECR..."
 docker tag "${ECR_REPO_NAME}:${IMAGE_TAG}" "$IMAGE_URI"
 docker push "$IMAGE_URI"
 
-# Step 4: Force new ECS deployment via CloudFormation update
-echo "[4/4] Updating ECS service via CloudFormation..."
+# Step 4: Update Lambda function image via CloudFormation
+echo "[4/4] Updating Lambda function via CloudFormation..."
 SPLUNK_ACCESS_TOKEN_PARAM="ParameterKey=SplunkAccessToken,UsePreviousValue=true"
 if [[ -n "$SPLUNK_ACCESS_TOKEN" ]]; then
     SPLUNK_ACCESS_TOKEN_PARAM="SplunkAccessToken=${SPLUNK_ACCESS_TOKEN}"
@@ -112,7 +112,6 @@ aws cloudformation deploy \
         "ParameterKey=AdminPassword,UsePreviousValue=true" \
         "$SPLUNK_ACCESS_TOKEN_PARAM" \
         AppVersion="$APP_VERSION" \
-        ImageVersion="$(date +%s)" \
     --capabilities CAPABILITY_NAMED_IAM \
     --tags \
         Project=o11y-gameday
@@ -120,7 +119,7 @@ aws cloudformation deploy \
 ENDPOINT=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --region "$REGION" \
-    --query "Stacks[0].Outputs[?OutputKey=='ServiceEndpoint'].OutputValue" \
+    --query "Stacks[0].Outputs[?OutputKey=='FunctionUrl'].OutputValue" \
     --output text 2>/dev/null || echo "pending")
 
 echo ""

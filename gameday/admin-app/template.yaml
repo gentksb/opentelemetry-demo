@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  o11y Game Day Admin App - ECS Express Mode + DynamoDB
+  o11y Game Day Admin App - Lambda (Lambda Web Adapter) + DynamoDB
 
 Parameters:
   StackSuffix:
@@ -36,11 +36,6 @@ Parameters:
     NoEcho: true
     Description: Admin API password (leave empty to disable auth)
 
-  ImageVersion:
-    Type: String
-    Default: "1"
-    Description: Increment to force ECS task definition update when using latest tag
-
   SplunkAccessToken:
     Type: String
     Default: ""
@@ -52,30 +47,8 @@ Parameters:
     Default: "dev"
     Description: Application version (git SHA) injected as service.version tag
 
-  OrgTag1Key:
-    Type: String
-    Default: ""
-    Description: "Organization tag #1 key (pass-through to ECS Express Mode managed resources for SCP compliance)"
-
-  OrgTag1Value:
-    Type: String
-    Default: ""
-    Description: "Organization tag #1 value"
-
-  OrgTag2Key:
-    Type: String
-    Default: ""
-    Description: "Organization tag #2 key"
-
-  OrgTag2Value:
-    Type: String
-    Default: ""
-    Description: "Organization tag #2 value"
-
 Conditions:
   ShouldCreateDynamoDB: !Equals [!Ref CreateDynamoDB, "true"]
-  HasOrgTag1: !Not [!Equals [!Ref OrgTag1Key, ""]]
-  HasOrgTag2: !Not [!Equals [!Ref OrgTag2Key, ""]]
 
 Resources:
   # ============================================================
@@ -97,16 +70,6 @@ Resources:
       Tags:
         - Key: Project
           Value: o11y-gameday
-        - !If
-          - HasOrgTag1
-          - Key: !Ref OrgTag1Key
-            Value: !Ref OrgTag1Value
-          - !Ref AWS::NoValue
-        - !If
-          - HasOrgTag2
-          - Key: !Ref OrgTag2Key
-            Value: !Ref OrgTag2Value
-          - !Ref AWS::NoValue
 
   AnswersTable:
     Type: AWS::DynamoDB::Table
@@ -128,16 +91,6 @@ Resources:
       Tags:
         - Key: Project
           Value: o11y-gameday
-        - !If
-          - HasOrgTag1
-          - Key: !Ref OrgTag1Key
-            Value: !Ref OrgTag1Value
-          - !Ref AWS::NoValue
-        - !If
-          - HasOrgTag2
-          - Key: !Ref OrgTag2Key
-            Value: !Ref OrgTag2Value
-          - !Ref AWS::NoValue
 
   QuestionsTable:
     Type: AWS::DynamoDB::Table
@@ -155,16 +108,6 @@ Resources:
       Tags:
         - Key: Project
           Value: o11y-gameday
-        - !If
-          - HasOrgTag1
-          - Key: !Ref OrgTag1Key
-            Value: !Ref OrgTag1Value
-          - !Ref AWS::NoValue
-        - !If
-          - HasOrgTag2
-          - Key: !Ref OrgTag2Key
-            Value: !Ref OrgTag2Value
-          - !Ref AWS::NoValue
 
   SettingsTable:
     Type: AWS::DynamoDB::Table
@@ -182,61 +125,23 @@ Resources:
       Tags:
         - Key: Project
           Value: o11y-gameday
-        - !If
-          - HasOrgTag1
-          - Key: !Ref OrgTag1Key
-            Value: !Ref OrgTag1Value
-          - !Ref AWS::NoValue
-        - !If
-          - HasOrgTag2
-          - Key: !Ref OrgTag2Key
-            Value: !Ref OrgTag2Value
-          - !Ref AWS::NoValue
 
   # ============================================================
-  # IAM Roles
+  # IAM Role (Lambda execution + DynamoDB access)
   # ============================================================
-
-  # Task Execution Role (for ECR pull, CloudWatch Logs)
-  TaskExecutionRole:
+  LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub gameday-admin-task-exec${StackSuffix}
+      RoleName: !Sub gameday-admin-lambda${StackSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              Service: ecs-tasks.amazonaws.com
+              Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-      Tags:
-        - Key: Project
-          Value: o11y-gameday
-        - !If
-          - HasOrgTag1
-          - Key: !Ref OrgTag1Key
-            Value: !Ref OrgTag1Value
-          - !Ref AWS::NoValue
-        - !If
-          - HasOrgTag2
-          - Key: !Ref OrgTag2Key
-            Value: !Ref OrgTag2Value
-          - !Ref AWS::NoValue
-
-  # Task Role (for DynamoDB access from the application)
-  TaskRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub gameday-admin-task${StackSuffix}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: sts:AssumeRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: DynamoDBAccess
           PolicyDocument:
@@ -258,113 +163,55 @@ Resources:
       Tags:
         - Key: Project
           Value: o11y-gameday
-        - !If
-          - HasOrgTag1
-          - Key: !Ref OrgTag1Key
-            Value: !Ref OrgTag1Value
-          - !Ref AWS::NoValue
-        - !If
-          - HasOrgTag2
-          - Key: !Ref OrgTag2Key
-            Value: !Ref OrgTag2Value
-          - !Ref AWS::NoValue
 
-  # Infrastructure Role (Express Mode: manages ALB, SG, ACM, auto-scaling)
-  InfrastructureRole:
-    Type: AWS::IAM::Role
+  # ============================================================
+  # Lambda Function (Lambda Web Adapter)
+  # ============================================================
+  AdminAppFunction:
+    Type: AWS::Lambda::Function
     Properties:
-      RoleName: !Sub gameday-admin-infra${StackSuffix}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowAccessToECSForInfrastructureManagement
-            Effect: Allow
-            Principal:
-              Service: ecs.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices
+      FunctionName: !Sub gameday-admin${StackSuffix}
+      Role: !GetAtt LambdaExecutionRole.Arn
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ContainerImage
+      MemorySize: 512
+      Timeout: 30
+      Environment:
+        Variables:
+          NODE_ENV: production
+          PORT: "3000"
+          AWS_REGION: !Ref AWS::Region
+          TEAMS_TABLE: !Sub gameday-teams${StackSuffix}
+          ANSWERS_TABLE: !Sub gameday-answers${StackSuffix}
+          QUESTIONS_TABLE: !Sub gameday-questions${StackSuffix}
+          SETTINGS_TABLE: !Sub gameday-settings${StackSuffix}
+          CLUSTER_NAME: !Ref ClusterName
+          SPLUNK_REALM: !Ref SplunkRealm
+          ADMIN_PASSWORD: !Ref AdminPassword
+          SPLUNK_ACCESS_TOKEN: !Ref SplunkAccessToken
+          OTEL_SERVICE_NAME: gameday-admin
+          OTEL_RESOURCE_ATTRIBUTES: !Sub "deployment.environment=z-gameday-admin,service.version=${AppVersion}"
       Tags:
         - Key: Project
           Value: o11y-gameday
-        - !If
-          - HasOrgTag1
-          - Key: !Ref OrgTag1Key
-            Value: !Ref OrgTag1Value
-          - !Ref AWS::NoValue
-        - !If
-          - HasOrgTag2
-          - Key: !Ref OrgTag2Key
-            Value: !Ref OrgTag2Value
-          - !Ref AWS::NoValue
 
-  # ============================================================
-  # ECS Express Gateway Service
-  # ============================================================
-  AdminAppService:
-    Type: AWS::ECS::ExpressGatewayService
-    DependsOn:
-      - TaskExecutionRole
-      - InfrastructureRole
-      - TaskRole
+  AdminAppFunctionUrl:
+    Type: AWS::Lambda::Url
     Properties:
-      ServiceName: !Sub gameday-admin${StackSuffix}
-      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
-      InfrastructureRoleArn: !GetAtt InfrastructureRole.Arn
-      TaskRoleArn: !GetAtt TaskRole.Arn
-      Cpu: "256"
-      Memory: "512"
-      HealthCheckPath: /health
-      PrimaryContainer:
-        Image: !Ref ContainerImage
-        ContainerPort: 3000
-        Environment:
-          - Name: NODE_ENV
-            Value: production
-          - Name: PORT
-            Value: "3000"
-          - Name: AWS_REGION
-            Value: !Ref AWS::Region
-          - Name: TEAMS_TABLE
-            Value: !Sub gameday-teams${StackSuffix}
-          - Name: ANSWERS_TABLE
-            Value: !Sub gameday-answers${StackSuffix}
-          - Name: QUESTIONS_TABLE
-            Value: !Sub gameday-questions${StackSuffix}
-          - Name: SETTINGS_TABLE
-            Value: !Sub gameday-settings${StackSuffix}
-          - Name: CLUSTER_NAME
-            Value: !Ref ClusterName
-          - Name: SPLUNK_REALM
-            Value: !Ref SplunkRealm
-          - Name: ADMIN_PASSWORD
-            Value: !Ref AdminPassword
-          - Name: IMAGE_VERSION
-            Value: !Ref ImageVersion
-          - Name: SPLUNK_ACCESS_TOKEN
-            Value: !Ref SplunkAccessToken
-          - Name: OTEL_SERVICE_NAME
-            Value: gameday-admin
-          - Name: OTEL_RESOURCE_ATTRIBUTES
-            Value: !Sub "deployment.environment=z-gameday-admin,service.version=${AppVersion}"
-      ScalingTarget:
-        MinTaskCount: 1
-        MaxTaskCount: 1
-        AutoScalingMetric: AVERAGE_CPU
-        AutoScalingTargetValue: 70
-      Tags:
-        - Key: Project
-          Value: o11y-gameday
-        - !If
-          - HasOrgTag1
-          - Key: !Ref OrgTag1Key
-            Value: !Ref OrgTag1Value
-          - !Ref AWS::NoValue
-        - !If
-          - HasOrgTag2
-          - Key: !Ref OrgTag2Key
-            Value: !Ref OrgTag2Value
-          - !Ref AWS::NoValue
+      TargetFunctionArn: !Ref AdminAppFunction
+      AuthType: NONE
+      Cors:
+        AllowOrigins:
+          - "*"
+
+  FunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AdminAppFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
 
 Outputs:
   # DynamoDB
@@ -380,15 +227,15 @@ Outputs:
     Description: DynamoDB Questions Table Name
     Value: !Sub gameday-questions${StackSuffix}
 
-  # ECS Express Mode
-  ServiceArn:
-    Description: ECS Express Service ARN
-    Value: !GetAtt AdminAppService.ServiceArn
+  # Lambda
+  FunctionArn:
+    Description: Lambda Function ARN
+    Value: !GetAtt AdminAppFunction.Arn
 
-  ServiceEndpoint:
-    Description: Admin App URL (auto-generated HTTPS endpoint)
-    Value: !GetAtt AdminAppService.Endpoint
+  FunctionUrl:
+    Description: Admin App URL (Lambda Function URL)
+    Value: !GetAtt AdminAppFunctionUrl.FunctionUrl
 
-  TaskRoleArn:
-    Description: ECS Task Role ARN
-    Value: !GetAtt TaskRole.Arn
+  LambdaRoleArn:
+    Description: Lambda Execution Role ARN
+    Value: !GetAtt LambdaExecutionRole.Arn
