@@ -47,7 +47,7 @@ spec:
       serviceAccountName: opentelemetry-demo
       containers:
       - name: frontend
-        image: ghcr.io/splunk/opentelemetry-demo/otel-frontend:1.5.0
+        image: ghcr.io/splunk/opentelemetry-demo/otel-frontend:1.7.2
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -108,6 +108,7 @@ spec:
             secretKeyRef:
               name: workshop-secret
               key: api_token
+              optional: true
         - name: SPLUNK_RUM_TOKEN
           valueFrom:
             secretKeyRef:

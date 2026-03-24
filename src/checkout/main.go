@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -313,6 +314,10 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 
 	prep, err := cs.prepareOrderItemsAndShippingQuoteFromCart(ctx, req.UserId, req.UserCurrency, req.Address)
 	if err != nil {
+		// Return FailedPrecondition for empty cart (client error), Internal for other errors
+		if err.Error() == "cannot place order with empty cart" {
+			return nil, status.Errorf(codes.FailedPrecondition, err.Error())
+		}
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 	span.AddEvent("prepared")
@@ -408,6 +413,12 @@ func (cs *checkout) prepareOrderItemsAndShippingQuoteFromCart(ctx context.Contex
 	if err != nil {
 		return out, fmt.Errorf("cart failure: %+v", err)
 	}
+
+	// Validate cart is not empty before proceeding
+	if len(cartItems) == 0 {
+		return out, fmt.Errorf("cannot place order with empty cart")
+	}
+
 	orderItems, err := cs.prepOrderItems(ctx, cartItems, userCurrency)
 	if err != nil {
 		return out, fmt.Errorf("failed to prepare order: %+v", err)
@@ -452,6 +463,11 @@ func mustCreateClient(svcAddr string) *grpc.ClientConn {
 }
 
 func (cs *checkout) quoteShipping(ctx context.Context, address *pb.Address, items []*pb.CartItem) (*pb.Money, error) {
+	// Ensure items is an empty array instead of null when cart is empty
+	if items == nil {
+		items = []*pb.CartItem{}
+	}
+
 	quotePayload, err := json.Marshal(map[string]interface{}{
 		"address": address,
 		"items":   items,
@@ -467,7 +483,7 @@ func (cs *checkout) quoteShipping(ctx context.Context, address *pb.Address, item
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed POST to email service: expected 200, got %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed POST to shipping service: expected 200, got %d", resp.StatusCode)
 	}
 
 	shippingQuoteBytes, err := io.ReadAll(resp.Body)
@@ -534,9 +550,34 @@ func (cs *checkout) convertCurrency(ctx context.Context, from *pb.Money, toCurre
 
 func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInfo *pb.CreditCardInfo) (string, error) {
 	paymentService := cs.paymentSvcClient
+
+	// Check for intentional failure mode (uses existing paymentUnreachable flag)
 	if cs.isFeatureFlagEnabled(ctx, "paymentUnreachable") {
 		badAddress := "badAddress:50051"
 		c := mustCreateClient(badAddress)
+		paymentService = pb.NewPaymentServiceClient(c)
+	} else {
+		// Use paymentFailure flag to route between payment version A and B
+		// paymentFailure=0   → 100% to version A
+		// paymentFailure=0.5 → 50% to A, 50% to B
+		// paymentFailure=1   → 100% to version B
+		paymentFailureProbability := cs.getFeatureFlagFloat(ctx, "paymentFailure", 0.0)
+
+		// Generate random number to determine routing
+		shouldRouteToB := rand.Float64() < paymentFailureProbability
+
+		var paymentAddr string
+		if shouldRouteToB {
+			// Route to version B (optimized/faster)
+			paymentAddr = "payment-vb:8080"
+		} else {
+			// Route to version A (stable/conservative)
+			paymentAddr = "payment-va:8080"
+		}
+
+		// Create client for selected version
+		c := mustCreateClient(paymentAddr)
+		defer c.Close()
 		paymentService = pb.NewPaymentServiceClient(c)
 	}
 
@@ -572,6 +613,11 @@ func (cs *checkout) sendOrderConfirmation(ctx context.Context, email string, ord
 }
 
 func (cs *checkout) shipOrder(ctx context.Context, address *pb.Address, items []*pb.CartItem) (string, error) {
+	// Ensure items is an empty array instead of null when cart is empty
+	if items == nil {
+		items = []*pb.CartItem{}
+	}
+
 	shipPayload, err := json.Marshal(map[string]interface{}{
 		"address": address,
 		"items":   items,
@@ -587,7 +633,7 @@ func (cs *checkout) shipOrder(ctx context.Context, address *pb.Address, items []
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed POST to email service: expected 200, got %d", resp.StatusCode)
+		return "", fmt.Errorf("failed POST to shipping service: expected 200, got %d", resp.StatusCode)
 	}
 
 	trackingRespBytes, err := io.ReadAll(resp.Body)
@@ -726,4 +772,32 @@ func (cs *checkout) getIntFeatureFlag(ctx context.Context, featureFlagName strin
 	)
 
 	return int(featureFlagValue)
+}
+
+func (cs *checkout) getFeatureFlagString(ctx context.Context, featureFlagName string, defaultValue string) string {
+	client := openfeature.NewClient("checkout")
+
+	// Get string value from feature flag
+	featureFlagValue, _ := client.StringValue(
+		ctx,
+		featureFlagName,
+		defaultValue,
+		openfeature.EvaluationContext{},
+	)
+
+	return featureFlagValue
+}
+
+func (cs *checkout) getFeatureFlagFloat(ctx context.Context, featureFlagName string, defaultValue float64) float64 {
+	client := openfeature.NewClient("checkout")
+
+	// Get float value from feature flag
+	featureFlagValue, _ := client.FloatValue(
+		ctx,
+		featureFlagName,
+		defaultValue,
+		openfeature.EvaluationContext{},
+	)
+
+	return featureFlagValue
 }

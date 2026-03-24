@@ -95,3 +95,7 @@ kubernetes/secrets.yaml
 AGENTS.md
 .agents/
 .agents/**/*
+
+# Confluence files (local use only)
+CONFLUENCE-GUIDE.md
+CONFLUENCE-GUIDE.confluence
