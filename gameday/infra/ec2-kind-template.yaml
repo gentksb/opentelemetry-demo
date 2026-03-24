@@ -209,27 +209,21 @@ Resources:
           # Install Helm
           curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-          # Create kind cluster with extra port mappings
-          cat <<EOF > /home/ec2-user/kind-config.yaml
-          kind: Cluster
-          apiVersion: kind.x-k8s.io/v1alpha4
-          nodes:
-          - role: control-plane
-            extraPortMappings:
-            - containerPort: 80
-              hostPort: 80
-              protocol: TCP
-            - containerPort: 443
-              hostPort: 443
-              protocol: TCP
-            - containerPort: 30080
-              hostPort: 8080
-              protocol: TCP
+          # Store Splunk credentials
+          cat <<EOF > /home/ec2-user/splunk-config.env
+          SPLUNK_ACCESS_TOKEN=${SplunkAccessToken}
+          SPLUNK_REALM=${SplunkRealm}
           EOF
-          chown ec2-user:ec2-user /home/ec2-user/kind-config.yaml
+          chmod 600 /home/ec2-user/splunk-config.env
+          chown ec2-user:ec2-user /home/ec2-user/splunk-config.env
 
-          # Create kind cluster as ec2-user
-          sudo -u ec2-user kind create cluster --name gameday --config /home/ec2-user/kind-config.yaml
+          # Clone repository first (kind-config.yaml is managed in the repo)
+          sudo -u ec2-user git clone -b ${GitBranch} ${GitRepoUrl} /home/ec2-user/opentelemetry-demo || \
+            sudo -u ec2-user git clone ${GitRepoUrl} /home/ec2-user/opentelemetry-demo || true
+
+          # Create kind cluster using config from repository
+          sudo -u ec2-user kind create cluster --name gameday \
+            --config /home/ec2-user/opentelemetry-demo/gameday/infra/kind-config.yaml
 
           # Copy kubeconfig
           mkdir -p /home/ec2-user/.kube
@@ -239,18 +233,6 @@ Resources:
 
           # Verify StorageClass (kind creates 'standard' by default; deploy-teams.sh creates 'local-path' alias if needed)
           sudo -u ec2-user kubectl get sc
-
-          # Store Splunk credentials
-          cat <<EOF > /home/ec2-user/splunk-config.env
-          SPLUNK_ACCESS_TOKEN=${SplunkAccessToken}
-          SPLUNK_REALM=${SplunkRealm}
-          EOF
-          chmod 600 /home/ec2-user/splunk-config.env
-          chown ec2-user:ec2-user /home/ec2-user/splunk-config.env
-
-          # Clone repository for deploy scripts
-          sudo -u ec2-user git clone -b ${GitBranch} ${GitRepoUrl} /home/ec2-user/opentelemetry-demo || \
-            sudo -u ec2-user git clone ${GitRepoUrl} /home/ec2-user/opentelemetry-demo || true
 
           echo "=== Game Day setup complete ==="
           echo "To deploy via SSM or SSH:"

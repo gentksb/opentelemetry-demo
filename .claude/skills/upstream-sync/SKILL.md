@@ -42,9 +42,8 @@ git merge-base tgen/o11y-gameday origin/main
 - 変更ファイルを分類：
   - `gameday/` 含む → **影響あり（手動対応必要）**
   - `kubernetes/splunk-astronomy-shop-*.yaml` 含む → **K8sマニフェスト更新（要確認）**
-  - `docker-compose.yml` / `.env` / `src/` / `splunk/` → 単純取り込み可
+  - `.env` / `src/` / `splunk/` → 単純取り込み可
   - `kubernetes/old/` への移動 → 確認（rename検出に注意）
-- docker-compose.yml の削除コミットがあるか確認
 
 **Agent B: 現状のGameday依存関係確認**
 以下を確認してレポート：
@@ -74,24 +73,18 @@ git merge --no-commit --no-ff origin/main
 | `.gitignore` | HEAD側(Gameday設定)とorigin/main側の両方を保持 |
 | その他テキスト | 内容を確認して適切にマージ |
 
-**マージ後の必須修復（origin/mainがDocker Composeを廃止しているため）:**
+**マージ後の必須修復（K8sマニフェストのrename検出対策）:**
 
 ```bash
 # Gamedayで使用中のK8sマニフェストをgitのrename検出から保護
-git checkout HEAD -- kubernetes/splunk-astronomy-shop-<MANIFEST_VERSION>.yaml
-
-# ローカル開発用docker-composeを保持（origin/mainが削除しているが本ブランチでは維持）
-git checkout HEAD -- docker-compose.yml docker-compose-tests.yml docker-compose-tests_include-override.yml docker-compose.minimal.yml
+git checkout HEAD -- kubernetes/splunk-astronomy-shop-<MANIFEST_VERSION>-diab.yaml
 ```
 
-> ⚠️ **重要**: origin/mainのコミット `3e2f171a` でDocker Composeサポートが廃止された。
-> マージ時にgitのrename検出が `kubernetes/splunk-astronomy-shop-1.5.5.yaml` を
+> ⚠️ **重要**: マージ時にgitのrename検出が `kubernetes/splunk-astronomy-shop-*.yaml` を
 > `kubernetes/old/` に移動しようとするため、明示的に元パスへ復元が必要。
 
 ```bash
-git add .gitignore kubernetes/splunk-astronomy-shop-<MANIFEST_VERSION>.yaml \
-  docker-compose.yml docker-compose-tests.yml docker-compose-tests_include-override.yml \
-  docker-compose.minimal.yml
+git add .gitignore kubernetes/splunk-astronomy-shop-<MANIFEST_VERSION>-diab.yaml
 ```
 
 ### Phase 5: 検証
@@ -118,8 +111,7 @@ git commit -m "chore: mainブランチのUpstream変更を取り込み
 - <変更内容サマリー>
 
 [Gameday影響なし]
-- kubernetes/splunk-astronomy-shop-<VERSION>.yaml は元パスを保持
-- docker-compose.yml 等はローカル開発用として保持
+- kubernetes/splunk-astronomy-shop-<VERSION>-diab.yaml は元パスを保持
 - gameday/ ディレクトリは変更なし"
 ```
 
@@ -154,18 +146,16 @@ git commit -m "chore: mainブランチのUpstream変更を取り込み
 
 ## 既知の注意事項（過去の実行から学習）
 
-1. **docker-compose廃止**: origin/main (`3e2f171a`) でDocker Composeが廃止済み。
-   マージ毎にdocker-compose*.ymlを `git checkout HEAD --` で復元が必要。
-
-2. **K8sマニフェストのrename検出**: gitが `kubernetes/*.yaml` を `kubernetes/old/*.yaml`
+1. **K8sマニフェストのrename検出**: gitが `kubernetes/*.yaml` を `kubernetes/old/*.yaml`
    へのrename と判断してしまう。`git checkout HEAD` で元パスに復元する。
 
-3. **コンフリクトは.gitignoreのみ**: 通常 `.gitignore` だけがコンフリクトする。
+2. **コンフリクトは.gitignoreのみ**: 通常 `.gitignore` だけがコンフリクトする。
    HEAD側（Gameday設定）とorigin/main側（Confluence等）を両方保持する。
 
-4. **product-reviews / llm**: origin/mainのK8sマニフェスト(`splunk/opentelemetry-demo.yaml`)
-   に未収録。docker-compose専用のため、Gameday K8s環境への追加は別タスクで対応。
+3. **product-reviews / llm**: origin/mainのK8sマニフェスト(`splunk/opentelemetry-demo.yaml`)
+   に未収録。Gameday K8s環境への追加は別タスクで対応。
 
-5. **Splunk固有イメージ**: 現行manifest(1.5.5)は `splunk/otel-*:1.5.0` イメージを使用。
-   origin/mainのK8sマニフェストはOSSイメージ(`otel/demo:2.1.3-*`)で、
-   **Splunk APM/RUM計装が異なる**。K8sマニフェストを切り替える際は別途検証が必要。
+4. **Splunk/OSSイメージ混在（1.7.2-diab）**: 現行manifest(1.7.2)は大半が
+   `ghcr.io/splunk/opentelemetry-demo/otel-*:1.7.2` だが、`currency` と `email` は
+   OSSイメージ(`ghcr.io/open-telemetry/demo:2.1.3-*`)を使用。
+   これらのサービスのSplunk APM計装は限定的な可能性がある。

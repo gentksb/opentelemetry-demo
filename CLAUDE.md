@@ -4,12 +4,28 @@ OpenTelemetry Demo（Astronomy Shop）のSplunkフォーク。ポリグロット
 
 ## 主要コマンド
 
-### docker開始コマンド
+### ローカル開発（kind/Kubernetes）
 
+Gameday EC2 環境と同一の kind クラスタを使用します。
+
+前提ツール: docker, kubectl, kind, helm
+
+```bash
+# kindクラスタ作成（初回）
+kind create cluster --name gameday-local \
+  --config gameday/infra/kind-config.yaml
+
+# Gamedayアプリデプロイ
+bash gameday/infra/deploy-teams.sh \
+  --splunk-token <TOKEN> \
+  --cluster-name gameday-local \
+  --enable-flags
+
+# アクセス: http://localhost:8080
+
+# クラスタ削除
+kind delete cluster --name gameday-local
 ```
-make start
-```
-その他のコマンドや`docker-compose`の実行を知りたい場合、[dockerデプロイ用ドキュメント](https://opentelemetry.io/docs/demo/docker-deployment/)を確認してください
 
 ### kubernetes開始コマンド
 

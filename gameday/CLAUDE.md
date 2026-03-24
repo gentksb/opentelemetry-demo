@@ -15,6 +15,96 @@
 - **管理アプリ**: Hono(Backend) + Vite/Preact(Frontend) + DynamoDB
 - **リージョン**: ap-northeast-1 (東京)
 
+## ローカルkind開発
+
+### セットアップ（初回）
+
+前提ツール: docker, kubectl, kind, helm
+
+```bash
+# kindクラスタ作成（EC2と同一設定）
+kind create cluster --name gameday-local \
+  --config gameday/infra/kind-config.yaml
+
+# Gamedayアプリデプロイ（Splunkトークンが必要）
+bash gameday/infra/deploy-teams.sh \
+  --splunk-token <TOKEN> \
+  --rum-token <RUM_TOKEN> \
+  --cluster-name gameday-local \
+  --enable-flags
+
+# アクセス確認
+# ショップ:     http://localhost:8080
+# Feature Flag: http://localhost:8080/feature/
+
+# クラスタ削除
+kind delete cluster --name gameday-local
+```
+
+### Manifestバージョン検証フロー
+
+新しいManifestバージョンを本番（EC2）に適用する前の確認手順：
+
+**Step 1: ローカルkindで検証**
+
+```bash
+kind create cluster --name verify-manifest \
+  --config gameday/infra/kind-config.yaml
+
+bash gameday/infra/deploy-teams.sh \
+  --splunk-token <TOKEN> \
+  --rum-token <RUM_TOKEN> \
+  --cluster-name verify-manifest \
+  --manifest-version <新VERSION> \
+  --enable-flags
+```
+
+確認事項：
+- `http://localhost:8080` でショップが表示されること
+- Feature Flags（cartFailure, adHighCpu等）が有効になること
+- Splunk Observability Cloud にトレース/メトリクスが届いていること
+- RUM データ（Browser）が届いていること
+
+**Step 2: deploy-teams.sh の MANIFEST_VERSION を更新してPRを作成**
+
+```bash
+# gameday/infra/deploy-teams.sh の MANIFEST_VERSION を更新
+# ローカル検証クラスタを削除
+kind delete cluster --name verify-manifest
+```
+
+**Step 3: EC2デプロイと本番検証**
+
+```bash
+# EC2 + kindクラスタを構築
+aws cloudformation deploy \
+  --template-file gameday/infra/ec2-kind-template.yaml \
+  --stack-name gameday-kind \
+  --region ap-northeast-1 \
+  --parameter-overrides KeyName=<KEY_PAIR> SplunkAccessToken=<TOKEN> SplunkRealm=jp0 \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --tags Project=o11y-gameday
+
+# EC2セットアップ完了を確認（"Game Day setup complete" を待つ）
+aws ssm start-session --target <INSTANCE_ID> --region ap-northeast-1
+# sudo tail -f /var/log/user-data.log
+
+# deploy-teams.sh を実行
+bash /home/ec2-user/opentelemetry-demo/gameday/infra/deploy-teams.sh \
+  --splunk-token <TOKEN> --rum-token <RUM_TOKEN> \
+  --splunk-realm jp0 --cluster-name gameday-kind --enable-flags
+```
+
+確認事項：
+- `http://<EC2_PUBLIC_IP>:8080` でショップが表示されること
+- Splunk Observability Cloud に RUM/APM データが届いていること
+
+**Step 4: クリーンアップ（検証後）**
+
+```bash
+aws cloudformation delete-stack --stack-name gameday-kind --region ap-northeast-1
+```
+
 ## インフラデプロイ
 
 ### EC2 + kind クラスタ

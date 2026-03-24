@@ -10,7 +10,7 @@ set -e
 SPLUNK_REALM="jp0"
 CLUSTER_NAME="gameday-otel-demo"
 REGION="ap-northeast-1"
-MANIFEST_VERSION="1.5.5"
+MANIFEST_VERSION="1.7.2"
 ENV_ID=""
 
 # Colors for output
@@ -37,7 +37,7 @@ Optional:
                          OTel environment tag is {cluster-name}-{6char-hash}
   --env-id ID            OTel environment tag suffix (default: auto-generated 6-char hex)
   --region REGION        AWS region (default: ap-northeast-1)
-  --manifest-version VER Manifest version (default: 1.5.5)
+  --manifest-version VER Manifest version (default: 1.7.2)
   --enable-flags         Enable all Game Day feature flags after deployment
   --skip-collector       Skip Splunk OTel Collector installation
   --dry-run              Show what would be deployed without deploying
@@ -211,10 +211,13 @@ if ! kubectl cluster-info &> /dev/null; then
     exit 1
 fi
 
-# Check manifest file
+# Check manifest file (support both plain and -diab suffixed filenames)
 MANIFEST_FILE="${REPO_ROOT}/kubernetes/splunk-astronomy-shop-${MANIFEST_VERSION}.yaml"
 if [[ ! -f "$MANIFEST_FILE" ]]; then
-    log_error "Manifest file not found: $MANIFEST_FILE"
+    MANIFEST_FILE="${REPO_ROOT}/kubernetes/splunk-astronomy-shop-${MANIFEST_VERSION}-diab.yaml"
+fi
+if [[ ! -f "$MANIFEST_FILE" ]]; then
+    log_error "Manifest file not found for version ${MANIFEST_VERSION}"
     log_info "Available manifests:"
     ls -1 "${REPO_ROOT}/kubernetes/splunk-astronomy-shop-"*.yaml 2>/dev/null || echo "  None found"
     exit 1
@@ -233,7 +236,7 @@ log_info "Cluster: ${CLUSTER_NAME}"
 log_info "Region: ${REGION}"
 log_info "Namespace: ${NAMESPACE}"
 log_info "Splunk realm: ${SPLUNK_REALM}"
-log_info "Manifest: splunk-astronomy-shop-${MANIFEST_VERSION}.yaml"
+log_info "Manifest: $(basename "$MANIFEST_FILE")"
 log_info "Enable flags: ${ENABLE_FLAGS:-false}"
 echo ""
 
